@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 const Problem = require('../models/Problem');
 const User = require('../models/User');
@@ -267,8 +268,9 @@ async function seedDatabase() {
     console.log('🚀 Starting comprehensive database seeding...');
     console.log('📡 Connecting to MongoDB...');
     
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGO_URI, {
+    // Connect to MongoDB (support MONGODB_URI fallback)
+    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/codecontest_dev';
+    await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });

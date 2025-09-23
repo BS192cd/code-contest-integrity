@@ -296,6 +296,31 @@ const executeSubmission = async (submissionId, problem) => {
     // Update contest statistics and leaderboard if applicable
     if (submission.contestId) {
       await updateContestStatistics(submission.contestId, submission.userId, submission.problemId, submission);
+      // Apply penalty for wrong attempts before first accepted
+      try {
+        const contest = await Contest.findById(submission.contestId);
+        if (contest && contest.rules?.penalty?.enabled) {
+          const userSubs = await Submission.find({
+            userId: submission.userId,
+            contestId: submission.contestId,
+            problemId: submission.problemId
+          }).sort({ createdAt: 1 });
+          const firstAcceptedIndex = userSubs.findIndex(s => s.status === 'accepted');
+          if (firstAcceptedIndex >= 0) {
+            const wrongBefore = userSubs.slice(0, firstAcceptedIndex).filter(s => s.status !== 'accepted').length;
+            if (wrongBefore > 0) {
+              const participant = contest.participants.find(p => p.user.toString() === submission.userId.toString());
+              if (participant) {
+                const penaltyPoints = wrongBefore * (contest.rules.penalty.points || 0);
+                participant.score = Math.max(0, participant.score - penaltyPoints);
+                await contest.save();
+              }
+            }
+          }
+        }
+      } catch (penErr) {
+        console.error('Penalty application error:', penErr);
+      }
       
       // Broadcast leaderboard update
       if (global.leaderboardSocket) {
@@ -545,12 +570,21 @@ const checkPlagiarism = async (submission) => {
       createdAt: { $lt: submission.createdAt } // Only check against earlier submissions
     }).limit(50).populate('userId', 'username fullName');
 
-    if (otherSubmissions.length === 0) {
-      console.log(`ℹ️  No other submissions found for plagiarism comparison`);
+    // Also gather same user's historical submissions for the same problem
+    const selfSubmissions = await Submission.find({
+      contestId: submission.contestId,
+      problemId: submission.problemId,
+      userId: submission.userId,
+      _id: { $ne: submission._id },
+      createdAt: { $lt: submission.createdAt }
+    }).limit(20);
+
+    if (otherSubmissions.length === 0 && selfSubmissions.length === 0) {
+      console.log(`ℹ️  No submissions found for plagiarism comparison`);
       return;
     }
 
-    console.log(`🔍 Comparing against ${otherSubmissions.length} other submissions`);
+    console.log(`🔍 Comparing against ${otherSubmissions.length} other submissions and ${selfSubmissions.length} self submissions`);
 
     let maxSimilarity = 0;
     const similarSubmissions = [];
@@ -591,6 +625,29 @@ const checkPlagiarism = async (submission) => {
         }
       } catch (comparisonError) {
         console.error(`Error comparing with submission ${otherSubmission._id}:`, comparisonError);
+      }
+    }
+
+    // Check similarity with user's own historical submissions
+    for (const prev of selfSubmissions) {
+      try {
+        const comparison = await plagiarismService.compareSubmissions(
+          submission,
+          prev
+        );
+
+        if (comparison.similarity >= 60) { // stricter threshold for self-copy
+          similarSubmissions.push({
+            submission: prev._id,
+            similarity: comparison.similarity,
+            details: comparison.details,
+            userId: submission.userId,
+            username: submission.userId.username || 'self'
+          });
+          maxSimilarity = Math.max(maxSimilarity, comparison.similarity);
+        }
+      } catch (comparisonError) {
+        console.error(`Error comparing with self submission ${prev._id}:`, comparisonError);
       }
     }
 
@@ -674,13 +731,35 @@ const runCode = async (req, res) => {
       });
     }
 
-    // Execute code with custom input
+    // If problemId provided, run against public (sample) test cases
+    if (problemId) {
+      const problem = await Problem.findById(problemId).lean();
+      if (!problem) {
+        return res.status(404).json({ success: false, error: 'Problem not found' });
+      }
+      const publicTests = (problem.testCases || []).filter(tc => tc.isPublic);
+      const results = await judge0Service.executeWithTestCases(
+        code,
+        language,
+        publicTests,
+        problem.timeLimit,
+        problem.memoryLimit
+      );
+
+      return res.json({
+        success: true,
+        data: {
+          results,
+          passed: results.filter(r => r.status === 'passed').length,
+          total: results.length
+        }
+      });
+    }
+
+    // Otherwise execute with custom input
     const result = await judge0Service.submitCode(code, language, input);
-    
-    // Get the result
     let executionResult;
     if (result.token) {
-      // Wait a bit for processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       executionResult = await judge0Service.getSubmissionResult(result.token);
     } else {
@@ -695,10 +774,7 @@ const runCode = async (req, res) => {
       memoryUsage: executionResult.memory ? Math.round(executionResult.memory / 1024) : null
     };
 
-    res.json({
-      success: true,
-      data: response
-    });
+    res.json({ success: true, data: response });
 
   } catch (error) {
     console.error('Run code error:', error);
