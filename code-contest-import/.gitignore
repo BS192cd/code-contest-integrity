@@ -1,0 +1,123 @@
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+
+# ===================================================================
+# General Purpose .gitignore file
+# ===================================================================
+
+# General
+# -------------------------------------------------------------------
+# Compiled source #
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+
+# Packages #
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+*.log
+*.sql
+*.sqlite
+
+# OS generated files #
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+# -------------------------------------------------------------------
+# VS Code #
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# JetBrains (IntelliJ, PyCharm, etc.) #
+.idea/
+
+# Sublime Text #
+*.sublime-project
+*.sublime-workspace
+
+# Dependencies / Build outputs
+# -------------------------------------------------------------------
+node_modules/
+dist/
+build/
+out/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ===================================================================
+# Language / Framework Specific (Uncomment what you need)
+# ===================================================================
+
+# Python
+# -------------------------------------------------------------------
+# __pycache__/
+# *.pyc
+# .pytest_cache/
+# venv/
+# .venv/
+# env/
+# .env/
+# *.egg-info/
+
+# Java
+# -------------------------------------------------------------------
+# *.jar
+# *.war
+# target/
+
+# Next.js / React
+# -------------------------------------------------------------------
+# .next/
+# .vercel/

@@ -1,0 +1,42 @@
+You are an expert Node.js backend developer. I already have a nearly complete CodeContest Pro platform (98% done). Your task is to complete the **remaining 2% of setup** and configure it to **run automatically on Replit** in a way that **minimizes external usage costs**, especially Judge0 API calls.
+
+---
+
+### 1️⃣ Environment & Configuration Setup
+- Check `.env.example` and ensure all necessary variables exist:
+    - `JUDGE0_API_KEY` → Can use **mock mode** if key is missing to avoid usage limits
+    - `MONGO_URI` → Use local MongoDB or Replit secrets for development
+    - `JWT_SECRET` → Generate a secure random secret if not provided
+- Ensure all routes read from `.env` correctly
+- Provide comments in `.env` for developers to replace with real production values
+
+---
+
+### 2️⃣ Minimal Usage Mode
+- Configure backend to **detect missing JUDGE0_API_KEY** and automatically:
+    - Switch to **mock code execution mode**
+    - Return realistic simulated responses for `/api/submissions/run`
+- Configure plagiarism endpoints to **use mock similarity results** if production algorithm not configured
+- Enable **development-friendly logging** instead of full analytics aggregation
+
+---
+
+### 3️⃣ Automatic Startup & Deployment on Replit
+- Add startup script in `package.json`:
+    - `"start": "node server.js"`
+- Configure Replit to **automatically run server** on project start
+- Ensure CORS is enabled for frontend connections
+- Ensure server runs in **mock mode by default** to minimize API calls and external usage
+
+---
+
+### 4️⃣ Deliverables
+- Backend ready to run **immediately in Replit** without consuming Judge0 credits
+- Mock mode automatically enabled if API key is missing
+- Minimal setup instructions for user to enter production credentials later
+- Comments indicating where to update `.env` for full production
+- All endpoints functional with mock data
+
+---
+
+Generate all necessary changes, update services, environment handling, and startup configuration so that the **platform runs automatically in Replit using minimal resources**, fully integrated with the existing frontend.

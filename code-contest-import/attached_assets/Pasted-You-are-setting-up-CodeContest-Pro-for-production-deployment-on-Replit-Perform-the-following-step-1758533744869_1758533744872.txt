@@ -1,0 +1,75 @@
+You are setting up CodeContest Pro for production deployment on Replit. 
+Perform the following steps carefully:
+
+1. Database Configuration
+   - Remove all unused PostgreSQL dependencies, configs, and references.
+   - Ensure MongoDB is the only database.
+   - Implement database connection using:
+       mongoose.connect(process.env.MONGO_URI)
+   - Fail gracefully with a clear error message if MONGO_URI is missing.
+
+2. Authentication
+   - Configure JWT authentication to use process.env.JWT_SECRET.
+   - Ensure secure signing & verification.
+   - Fail gracefully if JWT_SECRET is not set.
+
+3. Code Execution (Judge0 Integration)
+   - Update Judge0 integration to use process.env.JUDGE0_API_KEY.
+   - If JUDGE0_API_KEY is missing, automatically fall back to mock mode.
+   - Mock mode should simulate Judge0 responses for testing without external API costs.
+
+4. Plagiarism Detection (JPlag now, MOSS later)
+   - Implement plagiarism detection service with support for both engines:
+       - If process.env.MOSS_USER_ID exists → use MOSS.
+       - Else → fall back to JPlag.
+   - JPlag Service:
+       - Accepts student submissions, writes them to /tmp/jplag, runs JPlag CLI, 
+         parses results, and returns similarity scores + report path.
+       - If MOCK_MODE=true, generate fake similarity results instead of invoking JPlag.
+   - Save reports in /reports and return a public-facing URL for teachers.
+
+5. Environment Variables (Replit Secrets)
+   - Ensure all sensitive values are pulled only from process.env, never hardcoded.
+   - Required secrets:
+       - MONGO_URI → MongoDB connection string
+       - JWT_SECRET → Secret for JWT signing
+       - JUDGE0_API_KEY → Judge0 API key
+       - MOSS_USER_ID → (optional, for MOSS engine, fallback to JPlag if missing)
+       - MOCK_MODE → true/false flag for cost-saving mode
+
+6. Frontend & Backend Integration
+   - Frontend (Next.js 14, Port 5000) should run with:
+       HOST=0.0.0.0
+       PORT=5000
+   - Backend (Express API, Port 3001) should run with:
+       HOST=0.0.0.0
+       PORT=3001
+   - Ensure CORS allows frontend ↔ backend communication.
+
+7. Production Mode
+   - Add NODE_ENV=production in environment.
+   - Ensure builds use npm run build && npm start.
+   - Optimize logging with Winston: 
+       - In production → info & error logs
+       - In development → verbose logs
+
+8. Documentation (README Update)
+   - Clearly list required Replit Secrets:
+       - MONGO_URI
+       - JWT_SECRET
+       - JUDGE0_API_KEY
+       - MOSS_USER_ID (optional, fallback to JPlag)
+       - MOCK_MODE (true/false)
+   - Document how to:
+       - Run project locally (development mode with mock data).
+       - Run project in Replit production mode.
+       - Switch plagiarism engine from JPlag → MOSS when credentials available.
+   - Add troubleshooting section for missing or misconfigured secrets.
+
+Deliverables:
+- Clean backend code with only MongoDB as database.
+- JWT secured authentication.
+- Judge0 integration with API key + mock fallback.
+- Plagiarism detection supporting JPlag now, MOSS later.
+- Environment configs via process.env only.
+- README updated with full Replit Secrets setup and production instructions.

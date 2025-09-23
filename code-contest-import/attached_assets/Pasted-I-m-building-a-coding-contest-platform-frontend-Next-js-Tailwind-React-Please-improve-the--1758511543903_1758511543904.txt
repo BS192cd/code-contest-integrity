@@ -1,0 +1,51 @@
+I’m building a coding contest platform frontend (Next.js + Tailwind + React).  
+Please improve the UI/UX with the following detailed requirements:
+
+1. Sidebar
+- Make sidebar collapsible (slide in/out) with smooth animation.
+- Include sections: Active Contests, Upcoming Contests, Problems.
+- Each section should expand/collapse individually.
+- Add a toggle button in the header (works on both desktop and mobile).
+- Sidebar items should use consistent routing (see problem navigation below).
+
+2. Problem Navigation
+- Standardize navigation across:
+   a) Sidebar problems list,
+   b) Contest environment (after joining),
+   c) General problems page.
+- "View" → open `/problems/[id]/view` (problem details).
+- "Solve" → open `/problems/[id]/solve` (editor environment).
+- Both buttons must be functional everywhere (no dead buttons).
+- Disabled buttons (e.g. before contest start) should show a tooltip explaining why.
+
+3. Problem Pages
+- `/problems/[id]/view`: 
+   - Show statement, constraints, examples.
+   - Add tabs: Problem, Editorial, My Submissions.
+   - Expandable hints system.
+- `/problems/[id]/solve`: 
+   - Split layout: statement (left), editor (right).
+   - Resizable panels.
+   - Multi-language editor (Python, JS, Java, C++).
+   - Input/output testing area.
+   - Submit button integrated.
+
+4. Contest Flow
+- On "Join Contest": redirect to contest environment.
+- Contest environment:
+   - Sidebar shows contest problems with View/Solve buttons.
+   - Add contest timer (real-time countdown at top).
+   - Add contest stats: participants, progress, prize pool.
+   - Problem cards: include badges for difficulty and points.
+
+5. UI/UX Enhancements
+- Smooth transitions between pages (Framer Motion).
+- Sidebar animation for problem cards (staggered loading).
+- Hover effects and loading states for all buttons.
+- Toast notifications for navigation actions.
+- Dark theme with purple accents.
+- Responsive design for desktop + mobile.
+- Consistent typography and spacing across pages.
+
+Goal:  
+Deliver a polished experience similar to LeetCode/Codeforces with consistent navigation, professional editor experience, and smooth transitions. All View/Solve interactions should feel uniform throughout the platform.

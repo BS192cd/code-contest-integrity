@@ -1,0 +1,51 @@
+You are an expert Node.js backend developer. My frontend is fully working with a solve page using Monaco editor and resizable panels. Your task is to generate a **complete backend scaffold** that works with it. Requirements:
+
+1. **Project Setup**
+   - Node.js + Express.
+   - MongoDB via Mongoose.
+   - Remove any PostgreSQL references.
+   - Configure `.env` for JWT_SECRET, MONGO_URI, JUDGE0_API_KEY.
+
+2. **Models (Mongoose)**
+   - **User**: name, email, password (hashed), role ("teacher" | "student"), contestsHosted[], contestsJoined[].
+   - **Contest**: title, description, startTime, endTime, problems[], participants[].
+   - **Problem**: title, description, constraints, sampleInput, sampleOutput, testCases[], contestId.
+   - **Submission**: userId, problemId, code, language, status, output, executionTime, createdAt.
+
+3. **Authentication**
+   - JWT-based auth.
+   - Passwords hashed with bcrypt.
+   - Protect routes that require authentication.
+
+4. **API Routes**
+   - `/api/auth/signup` → register user.
+   - `/api/auth/login` → login, return JWT.
+   - `/api/users/me` → get user profile.
+   - `/api/contests` → CRUD contests (teacher-only for create/update/delete).
+   - `/api/problems` → CRUD problems (teacher-only, link to contests).
+   - `/api/submissions` → create submission (code + language + problemId) and store in DB.
+   - `/api/submissions/run` → send code to Judge0 API, return results, store in Submission.
+
+5. **Judge0 Integration**
+   - Implement submission execution: send code + languageId to Judge0.
+   - Return `{ status, output, executionTime, errors }`.
+
+6. **Middleware**
+   - JWT auth middleware for protected routes.
+   - Request validation (express-validator or Joi).
+   - Error handling middleware that returns JSON `{ success, message, data }`.
+
+7. **Extras**
+   - Placeholder routes for plagiarism check.
+   - Placeholder routes for analytics.
+   - CORS enabled for frontend.
+
+8. **Deliverables**
+   - Full project structure with `server.js`, `package.json`, `.env.example`.
+   - Mongoose models in `models/`.
+   - Routes in `routes/`.
+   - Middleware in `middleware/`.
+   - Sample request/response JSON for each endpoint as comments.
+   - Fully copy-paste ready for Replit.
+
+Generate **all backend code files and folder structure** in one go, ready to run on Replit. Ensure it integrates perfectly with the existing frontend solve page.

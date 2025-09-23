@@ -1,0 +1,74 @@
+You are an expert Node.js backend developer. I already have a working CodeContest Pro platform with:
+
+- Frontend fully built (Next.js, TypeScript, Tailwind, Monaco editor, resizable panels)
+- Backend mostly complete (Express, MongoDB, Mongoose, JWT auth)
+- Core APIs: /auth, /contests, /problems, /submissions
+- Database models: User, Contest, Problem, Submission, Report
+
+Your task: Complete the **remaining 15%** backend functionality.
+
+---
+
+### 1️⃣ Judge0 API Integration
+- Update `/api/submissions/run` to:
+  - Use **environment variable JUDGE0_API_KEY**
+  - Map languages: Python, Java, C++, JavaScript
+  - Send code + languageId + input (if any) to Judge0 API
+  - Receive and return `{ status, output, executionTime, errors }`
+  - Store results in **Submission model**
+- Include service file: `backend/services/judge0Service.js`
+- Include proper error handling
+
+---
+
+### 2️⃣ Plagiarism Detection Scaffolding
+- Create `backend/services/plagiarismService.js` with:
+  - Function `compareCode(codeA, codeB)` returning similarity percentage
+  - Configurable threshold (e.g., 70%)
+- API routes in `/api/plagiarism`:
+  - POST `/check` → receives `{ problemId, submissionId }`, compares against previous submissions
+  - Return `{ similarity, flagged: true/false }`
+- Connect placeholder to frontend UI
+- Add comments for where to implement actual similarity algorithm
+
+---
+
+### 3️⃣ Analytics Endpoints
+- Create `backend/routes/analytics.js` with endpoints:
+  - GET `/contest/:contestId` → return number of participants, average score, average execution time
+  - GET `/user/:userId` → return submissions stats, problems solved, performance trends
+- Include service file `backend/services/analyticsService.js` with placeholder functions
+- Connect endpoints to frontend charts (already built)
+
+---
+
+### 4️⃣ Environment & Production Setup
+- Update `.env.example`:
+  - JUDGE0_API_KEY=
+  - MONGO_URI=
+  - JWT_SECRET=
+- Ensure all routes use environment variables
+- Enable CORS for frontend
+- Add startup script in `package.json`:
+  - `"start": "node server.js"`
+
+---
+
+### 5️⃣ Deliverables
+- Fully functional Judge0 integration
+- Plagiarism scaffolding ready for implementation
+- Analytics endpoints ready for data aggregation
+- All backend code ready to run on Replit with **copy-paste**
+- Include comments explaining where to implement missing logic
+
+---
+
+Generate all **backend files and folder structure** in one go:
+
+- `server.js`
+- `routes/` (submissions.js, plagiarism.js, analytics.js)
+- `services/` (judge0Service.js, plagiarismService.js, analyticsService.js)
+- `.env.example`
+- Middleware updates if needed
+
+Ensure **all endpoints work with existing frontend**, JWT auth is protected, and MongoDB connections are configured.
