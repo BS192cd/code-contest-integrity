@@ -1,6 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
+// Safe model imports to avoid OverwriteModelError if loaded multiple times
 const Problem = require('../models/Problem');
 const User = require('../models/User');
 const Contest = require('../models/Contest');
@@ -16,17 +17,29 @@ const {
   additionalMiscProblems
 } = require('./extendedProblems');
 
-// Combine all problems (200+ total)
+// Filter function to remove problems with titles shorter than 5 characters
+function filterProblemsByTitleLength(problems) {
+  return problems.filter(problem => {
+    const titleLength = problem.title ? problem.title.length : 0;
+    if (titleLength < 5) {
+      console.log(`⚠️  Removing problem with short title: "${problem.title}" (${titleLength} characters)`);
+      return false;
+    }
+    return true;
+  });
+}
+
+// Combine all problems (200+ total) and filter out short titles
 const allCombinedProblems = [
-  ...allProblems,
-  ...additionalArrayProblems,
-  ...additionalLinkedListProblems,
-  ...additionalTreeProblems,
-  ...additionalGraphProblems,
-  ...additionalDPProblems,
-  ...additionalStackQueueProblems,
-  ...additionalHashingProblems,
-  ...additionalMiscProblems
+  ...filterProblemsByTitleLength(allProblems),
+  ...filterProblemsByTitleLength(additionalArrayProblems),
+  ...filterProblemsByTitleLength(additionalLinkedListProblems),
+  ...filterProblemsByTitleLength(additionalTreeProblems),
+  ...filterProblemsByTitleLength(additionalGraphProblems),
+  ...filterProblemsByTitleLength(additionalDPProblems),
+  ...filterProblemsByTitleLength(additionalStackQueueProblems),
+  ...filterProblemsByTitleLength(additionalHashingProblems),
+  ...filterProblemsByTitleLength(additionalMiscProblems)
 ];
 
 async function createAdminUser() {
@@ -38,7 +51,7 @@ async function createAdminUser() {
       adminUser = new User({
         username: 'admin',
         email: 'admin@codecontest.com',
-        passwordHash: 'admin123', // Will be hashed by pre-save middleware
+        passwordHash: 'admin123',
         fullName: 'System Administrator',
         role: 'admin',
         isActive: true,
@@ -76,38 +89,53 @@ async function seedProblems(adminUserId) {
     console.log('🗑️  Cleared existing problems');
     
     // Add metadata to all problems
-    const problemsWithMetadata = allCombinedProblems.map((problem, index) => ({
-      ...problem,
-      createdBy: adminUserId,
-      isPublic: true,
-      isActive: true,
-      statistics: {
-        totalSubmissions: 0,
-        acceptedSubmissions: 0,
-        acceptanceRate: 0,
-        averageScore: 0
-      },
-      hints: [
-        {
-          level: 1,
-          content: `Think about the ${problem.tags[0]} approach for this problem.`
-        },
-        {
-          level: 2,
-          content: `Consider the time complexity requirements: ${problem.timeLimit}s time limit.`
-        },
-        {
-          level: 3,
-          content: `Look at the constraints: this will guide your algorithm choice.`
+    const problemsWithMetadata = allCombinedProblems.map((problem, index) => {
+      const normalizedTestCases = (problem.testCases || []).map((tc, i) => {
+        const input = (tc.input ?? '').toString().trim();
+        let expectedOutput = (tc.expectedOutput ?? '').toString().trim();
+        if (tc.expectedOutput == null) {
+          console.log(`⚠️  [Seed] "${problem.title}" testCase #${i} missing expectedOutput → set to empty string`);
         }
-      ],
-      solutionTemplate: {
-        python: `def solve():\n    # Your solution here\n    pass\n\n# Read input\n# Process\n# Output result`,
-        javascript: `function solve() {\n    // Your solution here\n}\n\n// Read input\n// Process\n// Output result`,
-        java: `public class Solution {\n    public static void main(String[] args) {\n        // Your solution here\n    }\n}`,
-        cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your solution here\n    return 0;\n}`
-      }
-    }));
+        if (tc.input !== input || (tc.expectedOutput || '') !== expectedOutput) {
+          console.log(`🧹 [Seed] Normalized whitespace for "${problem.title}" testCase #${i}`);
+        }
+        return { ...tc, input, expectedOutput };
+      });
+
+      return {
+        ...problem,
+        testCases: normalizedTestCases,
+        createdBy: adminUserId,
+        isPublic: true,
+        isActive: true,
+        statistics: {
+          totalSubmissions: 0,
+          acceptedSubmissions: 0,
+          acceptanceRate: 0,
+          averageScore: 0
+        },
+        hints: [
+          {
+            level: 1,
+            content: `Think about the ${problem.tags[0]} approach for this problem.`
+          },
+          {
+            level: 2,
+            content: `Consider the time complexity requirements: ${problem.timeLimit}s time limit.`
+          },
+          {
+            level: 3,
+            content: `Look at the constraints: this will guide your algorithm choice.`
+          }
+        ],
+        solutionTemplate: {
+          python: `def solve():\n    # Your solution here\n    pass\n\n# Read input\n# Process\n# Output result`,
+          javascript: `function solve() {\n    // Your solution here\n}\n\n// Read input\n// Process\n// Output result`,
+          java: `public class Solution {\n    public static void main(String[] args) {\n        // Your solution here\n    }\n}`,
+          cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your solution here\n    return 0;\n}`
+        }
+      };
+    });
     
     // Insert problems in batches for better performance
     const batchSize = 50;
@@ -165,8 +193,8 @@ async function createSampleContests(adminUserId, problemIds) {
         title: "Beginner Programming Contest",
         description: "A contest designed for beginners to practice basic programming concepts including arrays, strings, and simple algorithms.",
         createdBy: adminUserId,
-        startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
-        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000), // 2 hours duration
+        startTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        endTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 2 * 60 * 60 * 1000),
         duration: 120,
         difficulty: "Easy",
         maxParticipants: 1000,
@@ -184,66 +212,6 @@ async function createSampleContests(adminUserId, problemIds) {
           plagiarismDetection: { enabled: true, threshold: 70 }
         },
         tags: ['beginner', 'practice'],
-        statistics: {
-          totalParticipants: 0,
-          totalSubmissions: 0,
-          averageScore: 0,
-          completionRate: 0
-        }
-      },
-      {
-        title: "Data Structures Challenge",
-        description: "Advanced contest focusing on data structures including trees, graphs, and dynamic programming problems.",
-        createdBy: adminUserId,
-        startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Next week
-        endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000), // 3 hours duration
-        duration: 180,
-        difficulty: "Hard",
-        maxParticipants: 500,
-        isPublic: true,
-        registrationRequired: true,
-        problems: problemIds.slice(10, 18).map((id, index) => ({
-          problem: id,
-          points: 150 + index * 25,
-          order: index
-        })),
-        rules: {
-          allowedLanguages: ['python', 'javascript', 'java', 'cpp'],
-          maxSubmissions: 10,
-          penalty: { enabled: true, points: 20 },
-          plagiarismDetection: { enabled: true, threshold: 60 }
-        },
-        tags: ['advanced', 'data-structures'],
-        statistics: {
-          totalParticipants: 0,
-          totalSubmissions: 0,
-          averageScore: 0,
-          completionRate: 0
-        }
-      },
-      {
-        title: "Algorithm Mastery Contest",
-        description: "Expert-level contest with complex algorithmic problems requiring advanced problem-solving skills.",
-        createdBy: adminUserId,
-        startTime: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Two weeks from now
-        endTime: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000), // 4 hours duration
-        duration: 240,
-        difficulty: "Expert",
-        maxParticipants: 200,
-        isPublic: true,
-        registrationRequired: true,
-        problems: problemIds.slice(20, 26).map((id, index) => ({
-          problem: id,
-          points: 200 + index * 50,
-          order: index
-        })),
-        rules: {
-          allowedLanguages: ['python', 'javascript', 'java', 'cpp'],
-          maxSubmissions: 5,
-          penalty: { enabled: true, points: 50 },
-          plagiarismDetection: { enabled: true, threshold: 50 }
-        },
-        tags: ['expert', 'algorithms'],
         statistics: {
           totalParticipants: 0,
           totalSubmissions: 0,
@@ -268,7 +236,6 @@ async function seedDatabase() {
     console.log('🚀 Starting comprehensive database seeding...');
     console.log('📡 Connecting to MongoDB...');
     
-    // Connect to MongoDB (support MONGODB_URI fallback)
     const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/codecontest_dev';
     await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
@@ -276,17 +243,12 @@ async function seedDatabase() {
     });
     console.log('✅ Connected to MongoDB');
     
-    // Create admin user
     const adminUser = await createAdminUser();
-    
-    // Seed problems
     const problemCount = await seedProblems(adminUser._id);
     
-    // Get problem IDs for contest creation
     const problems = await Problem.find({}).select('_id');
     const problemIds = problems.map(p => p._id);
     
-    // Create sample contests
     const contests = await createSampleContests(adminUser._id, problemIds);
     
     console.log('\n🎉 Database seeding completed successfully!');
@@ -294,17 +256,10 @@ async function seedDatabase() {
     console.log(`   👤 Admin user: ${adminUser.email}`);
     console.log(`   📚 Problems: ${problemCount}`);
     console.log(`   🏆 Contests: ${contests.length}`);
-    console.log(`   🔗 Database: ${mongoose.connection.name}`);
     
     console.log('\n🔑 Admin Credentials:');
     console.log(`   Email: admin@codecontest.com`);
     console.log(`   Password: admin123`);
-    
-    console.log('\n📋 Next Steps:');
-    console.log('   1. Start the backend server: npm start');
-    console.log('   2. Start the frontend: npm run dev:local');
-    console.log('   3. Login with admin credentials');
-    console.log('   4. Create additional users and test the platform');
     
   } catch (error) {
     console.error('❌ Database seeding failed:', error);

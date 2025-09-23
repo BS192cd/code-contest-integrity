@@ -166,11 +166,15 @@ class Judge0Service {
           // Poll for result with timeout
           const result = await this.pollForResult(submission.token, 30000); // 30 second timeout
           
+          // Normalize expected and actual to reduce whitespace-related wrong answers
+          const expectedTrimmed = (testCase.expectedOutput ?? '').toString().trim();
+          const actualTrimmed = (result.stdout || '').toString().trim();
+
           const testResult = {
             testCaseIndex: i,
-            input: testCase.input,
-            expectedOutput: testCase.expectedOutput,
-            actualOutput: result.stdout || '',
+            input: (testCase.input ?? '').toString().trim(),
+            expectedOutput: expectedTrimmed,
+            actualOutput: actualTrimmed,
             status: this.mapStatusToInternal(result.status),
             executionTime: result.time ? parseFloat(result.time) * 1000 : null,
             memoryUsage: result.memory ? Math.round(result.memory / 1024) : null,
@@ -178,10 +182,12 @@ class Judge0Service {
             points: testCase.points || 10
           };
 
-          // Check if output matches expected (for correct answer verification)
-          if (testResult.status === 'passed' && testResult.actualOutput.trim() !== testCase.expectedOutput.trim()) {
-            testResult.status = 'failed';
-            testResult.errorMessage = 'Output does not match expected result';
+          // Accept if normalized outputs match, otherwise mark failed
+          if (testResult.status === 'passed') {
+            if (actualTrimmed !== expectedTrimmed) {
+              testResult.status = 'failed';
+              testResult.errorMessage = 'Output does not match expected result';
+            }
           }
 
           results.push(testResult);

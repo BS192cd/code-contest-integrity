@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { DashboardHeader } from "@/components/dashboard-header"
@@ -11,65 +11,21 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { CheckCircle, XCircle, AlertCircle, Search, Filter, Eye, Code2 } from "lucide-react"
+import { apiClient } from "@/lib/api-client"
 
-const mockProblems = [
-  {
-    id: 1,
-    title: "Two Sum",
-    description:
-      "Given an array of integers, return indices of the two numbers such that they add up to a specific target.",
-    difficulty: "Easy",
-    category: "Array",
-    solved: true,
-    attempted: true,
-    acceptance: 85,
-    submissions: 1234567,
-  },
-  {
-    id: 2,
-    title: "Binary Tree Traversal",
-    description: "Implement inorder, preorder, and postorder traversal of a binary tree.",
-    difficulty: "Medium",
-    category: "Tree",
-    solved: false,
-    attempted: true,
-    acceptance: 67,
-    submissions: 456789,
-  },
-  {
-    id: 3,
-    title: "Dynamic Programming Challenge",
-    description: "Solve a complex optimization problem using dynamic programming techniques.",
-    difficulty: "Hard",
-    category: "Dynamic Programming",
-    solved: false,
-    attempted: false,
-    acceptance: 34,
-    submissions: 123456,
-  },
-  {
-    id: 4,
-    title: "Graph Shortest Path",
-    description: "Find the shortest path between two nodes in a weighted graph using Dijkstra's algorithm.",
-    difficulty: "Medium",
-    category: "Graph",
-    solved: true,
-    attempted: true,
-    acceptance: 56,
-    submissions: 234567,
-  },
-  {
-    id: 5,
-    title: "String Pattern Matching",
-    description: "Implement efficient string pattern matching using KMP algorithm.",
-    difficulty: "Hard",
-    category: "String",
-    solved: false,
-    attempted: false,
-    acceptance: 42,
-    submissions: 98765,
-  },
-]
+interface ProblemItem {
+  _id: string
+  title: string
+  description?: string
+  statement?: string
+  difficulty: string
+  category?: string
+  tags?: string[]
+  statistics?: {
+    totalSubmissions?: number
+    acceptanceRate?: number
+  }
+}
 
 export default function ProblemsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -77,8 +33,48 @@ export default function ProblemsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [problems, setProblems] = useState<ProblemItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const router = useRouter()
   const { toast } = useToast()
+
+  useEffect(() => {
+    const fetchProblems = async () => {
+      setIsLoading(true)
+      setLoadError(null)
+      try {
+        const response = await apiClient.getProblems({
+          page: 1,
+          limit: 50,
+          difficulty: difficultyFilter !== "all" ? difficultyFilter : undefined,
+          category: categoryFilter !== "all" ? categoryFilter : undefined,
+        })
+        if (response.success) {
+          // Backend returns { success, data, pagination }
+          // response.data can be an array
+          // @ts-ignore
+          const list = (response.data || []) as ProblemItem[]
+          setProblems(list)
+        } else {
+          throw new Error(response.error || "Failed to load problems")
+        }
+      } catch (err: any) {
+        console.error(err)
+        setLoadError(err.message || "Failed to load problems")
+        toast({
+          title: "Failed to load problems",
+          description: "The server may be unavailable. Showing empty list.",
+          variant: "destructive",
+        })
+        setProblems([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchProblems()
+  }, [difficultyFilter, categoryFilter, toast])
 
   const getStatusIcon = (solved: boolean, attempted: boolean) => {
     if (solved) return <CheckCircle className="h-4 w-4 text-green-400" />
@@ -99,7 +95,7 @@ export default function ProblemsPage() {
     }
   }
 
-  const handleViewProblem = (problemId: number, problemTitle: string) => {
+  const handleViewProblem = (problemId: string, problemTitle: string) => {
     router.push(`/problems/${problemId}/view`)
     toast({
       title: "Opening problem",
@@ -107,7 +103,7 @@ export default function ProblemsPage() {
     })
   }
 
-  const handleSolveProblem = (problemId: number, problemTitle: string) => {
+  const handleSolveProblem = (problemId: string, problemTitle: string) => {
     router.push(`/problems/${problemId}/solve`)
     toast({
       title: "Starting solution",
@@ -115,18 +111,15 @@ export default function ProblemsPage() {
     })
   }
 
-  const filteredProblems = mockProblems.filter((problem) => {
+  const filteredProblems = problems.filter((problem) => {
+    const description = (problem.description || problem.statement || "").toLowerCase()
     const matchesSearch =
       problem.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      problem.description.toLowerCase().includes(searchQuery.toLowerCase())
+      description.includes(searchQuery.toLowerCase())
     const matchesDifficulty = difficultyFilter === "all" || problem.difficulty === difficultyFilter
     const matchesCategory = categoryFilter === "all" || problem.category === categoryFilter
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "solved" && problem.solved) ||
-      (statusFilter === "attempted" && problem.attempted && !problem.solved) ||
-      (statusFilter === "unsolved" && !problem.attempted)
-
+    // Status is not provided from backend per-user here; keep it neutral
+    const matchesStatus = statusFilter === "all"
     return matchesSearch && matchesDifficulty && matchesCategory && matchesStatus
   })
 
@@ -206,26 +199,45 @@ export default function ProblemsPage() {
 
             {/* Problems List */}
             <div className="space-y-4">
-              {filteredProblems.map((problem) => (
-                <Card key={problem.id} className="hover:shadow-md transition-shadow">
+              {isLoading && (
+                <Card>
+                  <CardContent className="p-6 text-sm text-muted-foreground">Loading problems...</CardContent>
+                </Card>
+              )}
+              {!isLoading && loadError && (
+                <Card>
+                  <CardContent className="p-6 text-sm text-destructive">{loadError}</CardContent>
+                </Card>
+              )}
+              {!isLoading && filteredProblems.map((problem) => (
+                <Card key={problem._id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1">
-                        {getStatusIcon(problem.solved, problem.attempted)}
+                        {getStatusIcon(false, false)}
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h3 className="font-semibold text-lg">{problem.title}</h3>
                             <Badge variant={getDifficultyColor(problem.difficulty)} className="text-xs">
                               {problem.difficulty}
                             </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {problem.category}
-                            </Badge>
+                            {problem.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {problem.category}
+                              </Badge>
+                            )}
+                            {!!(problem.tags && problem.tags.length) && problem.tags.slice(0, 2).map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                            ))}
                           </div>
-                          <p className="text-muted-foreground text-sm text-pretty mb-3">{problem.description}</p>
+                          <p className="text-muted-foreground text-sm text-pretty mb-3">{problem.description || problem.statement}</p>
                           <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span>Acceptance: {problem.acceptance}%</span>
-                            <span>Submissions: {problem.submissions.toLocaleString()}</span>
+                            {typeof problem.statistics?.acceptanceRate === 'number' && (
+                              <span>Acceptance: {Math.round(problem.statistics.acceptanceRate)}%</span>
+                            )}
+                            {typeof problem.statistics?.totalSubmissions === 'number' && (
+                              <span>Submissions: {problem.statistics.totalSubmissions.toLocaleString()}</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -233,17 +245,17 @@ export default function ProblemsPage() {
                         <Button 
                           variant="outline" 
                           size="sm"
-                          onClick={() => handleViewProblem(problem.id, problem.title)}
+                          onClick={() => handleViewProblem(problem._id, problem.title)}
                         >
                           <Eye className="h-3 w-3 mr-1" />
                           View
                         </Button>
                         <Button 
                           size="sm"
-                          onClick={() => handleSolveProblem(problem.id, problem.title)}
+                          onClick={() => handleSolveProblem(problem._id, problem.title)}
                         >
                           <Code2 className="h-3 w-3 mr-1" />
-                          {problem.solved ? "Solve Again" : "Solve"}
+                          Solve
                         </Button>
                       </div>
                     </div>
@@ -252,7 +264,7 @@ export default function ProblemsPage() {
               ))}
             </div>
 
-            {filteredProblems.length === 0 && (
+            {!isLoading && filteredProblems.length === 0 && (
               <Card>
                 <CardContent className="p-12 text-center">
                   <div className="text-muted-foreground">

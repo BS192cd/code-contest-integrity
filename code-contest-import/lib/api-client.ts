@@ -1,5 +1,6 @@
 // lib/api-client.ts - Should point to your backend
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Base URL should include the /api segment to avoid duplicating in endpoints
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -68,7 +69,7 @@ class ApiClient {
 
   // Authentication endpoints
   async login(login: string, password: string) {
-    return this.request('/api/auth/login', {  // ← FIXED: Added /api
+    return this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ login, password })
     });
@@ -81,7 +82,7 @@ class ApiClient {
     fullName: string;
     role: 'student' | 'teacher';
   }) {
-    const response = await this.request<{ user: any; token: string }>('/api/auth/register', {
+    const response = await this.request<{ user: any; token: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
@@ -94,12 +95,12 @@ class ApiClient {
   }
 
   async getProfile() {
-    return this.request<{ user: any }>('/api/auth/profile');
+    return this.request<{ user: any }>('/auth/profile');
   }
 
   async logout() {
     try {
-      await this.request('/api/auth/logout', { method: 'POST' });
+      await this.request('/auth/logout', { method: 'POST' });
     } finally {
       this.setToken(null);
     }
@@ -122,28 +123,28 @@ class ApiClient {
     }
 
     const query = searchParams.toString();
-    return this.request<any[]>(`/api/contests${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/contests${query ? `?${query}` : ''}`);
   }
 
   async getContest(id: string) {
-    return this.request<any>(`/api/contests/${id}`);
+    return this.request<any>(`/contests/${id}`);
   }
 
   async createContest(contestData: any) {
-    return this.request<any>('/api/contests', {
+    return this.request<any>('/contests', {
       method: 'POST',
       body: JSON.stringify(contestData),
     });
   }
 
   async joinContest(contestId: string) {
-    return this.request(`/api/contests/${contestId}/join`, {
+    return this.request(`/contests/${contestId}/join`, {
       method: 'POST',
     });
   }
 
   async leaveContest(contestId: string) {
-    return this.request(`/api/contests/${contestId}/leave`, {
+    return this.request(`/contests/${contestId}/leave`, {
       method: 'DELETE',
     });
   }
@@ -165,11 +166,11 @@ class ApiClient {
     }
 
     const query = searchParams.toString();
-    return this.request<any[]>(`/api/problems${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/problems${query ? `?${query}` : ''}`);
   }
 
   async getProblem(id: string) {
-    return this.request<any>(`/api/problems/${id}`);
+    return this.request<any>(`/problems/${id}`);
   }
 
   // Submission endpoints
@@ -179,7 +180,7 @@ class ApiClient {
     problemId: string;
     contestId?: string;
   }) {
-    return this.request<any>('/api/submissions', {
+    return this.request<any>('/submissions', {
       method: 'POST',
       body: JSON.stringify(submissionData),
     });
@@ -203,19 +204,20 @@ class ApiClient {
     }
 
     const query = searchParams.toString();
-    return this.request<any[]>(`/api/submissions${query ? `?${query}` : ''}`);
+    return this.request<any[]>(`/submissions${query ? `?${query}` : ''}`);
   }
 
   async getSubmission(id: string) {
-    return this.request<any>(`/api/submissions/${id}`);
+    return this.request<any>(`/submissions/${id}`);
   }
 
   async runCode(codeData: {
     code: string;
     language: string;
     input?: string;
+    problemId?: string;
   }) {
-    return this.request<any>('/api/submissions/run', {
+    return this.request<any>('/submissions/run', {
       method: 'POST',
       body: JSON.stringify(codeData),
     });
@@ -224,22 +226,22 @@ class ApiClient {
   // Leaderboard endpoints
   async getLeaderboard(contestId?: string) {
     const query = contestId ? `?contestId=${contestId}` : '';
-    return this.request<any>(`/api/leaderboard${query}`);
+    return this.request<any>(`/leaderboard${query}`);
   }
 
   // Analytics endpoints
   async getUserAnalytics(userId?: string) {
-    const endpoint = userId ? `/api/analytics/users/${userId}` : '/api/analytics/users';
+    const endpoint = userId ? `/analytics/users/${userId}` : '/analytics/users';
     return this.request<any>(endpoint);
   }
 
   async getContestAnalytics(contestId: string) {
-    return this.request<any>(`/api/analytics/contests/${contestId}`);
+    return this.request<any>(`/analytics/contests/${contestId}`);
   }
 
   // Health check
   async healthCheck() {
-    return this.request<any>('/api/health');
+    return this.request<any>('/health');
   }
 }
 

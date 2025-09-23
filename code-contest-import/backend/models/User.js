@@ -154,4 +154,4 @@ userSchema.methods.getPublicProfile = function() {
   return userObject;
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

@@ -252,4 +252,4 @@ submissionSchema.methods.updateStatus = function() {
   this.score = this.calculateScore();
 };
 
-module.exports = mongoose.model('Submission', submissionSchema);
+module.exports = mongoose.models.Submission || mongoose.model('Submission', submissionSchema);

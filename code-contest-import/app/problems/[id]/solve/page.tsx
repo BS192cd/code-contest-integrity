@@ -28,52 +28,20 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 
-// Mock problem data
-const mockProblem = {
-  id: 1,
-  title: "Two Sum",
-  difficulty: "Easy",
-  category: "Array",
-  description: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
-
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
-
-You can return the answer in any order.`,
-  examples: [
-    {
-      input: "nums = [2,7,11,15], target = 9",
-      output: "[0,1]",
-      explanation: "Because nums[0] + nums[1] == 9, we return [0, 1].",
-    },
-    {
-      input: "nums = [3,2,4], target = 6",
-      output: "[1,2]",
-      explanation: "Because nums[1] + nums[2] == 6, we return [1, 2].",
-    },
-  ],
-  testCases: [
-    {
-      id: 1,
-      input: "[2,7,11,15]\n9",
-      expectedOutput: "[0,1]",
-      status: "pending" as const,
-      actualOutput: "",
-      executionTime: "",
-      memory: "",
-    },
-    {
-      id: 2,
-      input: "[3,2,4]\n6",
-      expectedOutput: "[1,2]",
-      status: "pending" as const,
-      actualOutput: "",
-      executionTime: "",
-      memory: "",
-    },
-  ],
-  timeLimit: 2000,
-  memoryLimit: 128
+interface ProblemDetails {
+  _id: string
+  title: string
+  difficulty: string
+  category?: string
+  description?: string
+  statement?: string
+  examples?: { input: string; output: string; explanation?: string }[]
+  testCases?: { input: string; expectedOutput: string; isPublic?: boolean }[]
+  timeLimit?: number
+  memoryLimit?: number
+  solutionTemplate?: Record<string, string>
 }
 
 const defaultCode = {
@@ -116,34 +84,51 @@ export default function ProblemSolvePage() {
   const [code, setCode] = useState(defaultCode.python)
   const [isRunning, setIsRunning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [testResults, setTestResults] = useState(mockProblem.testCases)
+  const [testResults, setTestResults] = useState<any[]>([])
   const [customInput, setCustomInput] = useState("")
   const [customOutput, setCustomOutput] = useState("")
+  const [problem, setProblem] = useState<ProblemDetails | null>(null)
 
   useEffect(() => {
     setCode(defaultCode[language as keyof typeof defaultCode])
   }, [language])
 
+  useEffect(() => {
+    const load = async () => {
+      if (!params?.id) return
+      try {
+        const res = await apiClient.getProblem(String(params.id))
+        if (res.success) {
+          const p = res.data as any as ProblemDetails
+          setProblem(p)
+          setTestResults((p.testCases || []).filter(tc => (tc as any).isPublic))
+          if (p.solutionTemplate && p.solutionTemplate[language as keyof typeof p.solutionTemplate]) {
+            setCode(p.solutionTemplate[language as keyof typeof p.solutionTemplate] as string)
+          }
+        }
+      } catch (e) {
+        console.error(e)
+        toast({ title: 'Failed to load problem', description: 'Server unavailable', variant: 'destructive' })
+      }
+    }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.id])
+
   const handleRunCode = async () => {
     setIsRunning(true)
     try {
-      // Simulate code execution
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Simulate test results
-      const results = mockProblem.testCases.map((testCase) => ({
-        ...testCase,
-        status: Math.random() > 0.3 ? "passed" : ("failed" as const),
-        actualOutput: Math.random() > 0.3 ? testCase.expectedOutput : "incorrect output",
-        executionTime: `${Math.floor(Math.random() * 5) + 1}ms`,
-        memory: `${(Math.random() * 10 + 40).toFixed(1)} MB`,
-      }))
-
-      setTestResults(results)
-      toast({
-        title: "Code executed successfully",
-        description: `${results.filter((r) => r.status === "passed").length}/${results.length} test cases passed`,
-      })
+      const runRes = await apiClient.runCode({ code, language, input: '', problemId: String(params.id) })
+      if (runRes.success) {
+        const data: any = runRes.data
+        const results = data?.results || []
+        setTestResults(results.length ? results : [])
+        const passed = data?.passed ?? results.filter((r: any) => r.status === 'passed').length
+        const total = data?.total ?? results.length
+        toast({ title: 'Code executed successfully', description: `${passed}/${total} test cases passed` })
+      } else {
+        throw new Error(runRes.error || 'Failed to run code')
+      }
     } catch (error) {
       toast({
         title: "Execution failed",
@@ -158,13 +143,16 @@ export default function ProblemSolvePage() {
   const handleSubmit = async () => {
     setIsSubmitting(true)
     try {
-      // Simulate submission
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-
-      toast({
-        title: "Solution submitted!",
-        description: "Your solution has been submitted for evaluation.",
+      const res = await apiClient.submitSolution({
+        code,
+        language,
+        problemId: String(params.id),
       })
+      if (res.success) {
+        toast({ title: 'Solution submitted!', description: 'Your solution has been submitted for evaluation.' })
+      } else {
+        throw new Error(res.error || 'Submission failed')
+      }
     } catch (error) {
       toast({
         title: "Submission failed",
@@ -185,17 +173,22 @@ export default function ProblemSolvePage() {
       })
       return
     }
-
     setCustomOutput("Processing...")
-    
-    // Simulate custom input execution
-    setTimeout(() => {
-      setCustomOutput(`Output for input: ${customInput}\n[0,1]`)
-      toast({
-        title: "Custom test completed",
-        description: "Your code has been tested with custom input.",
+    apiClient.runCode({ code, language, input: customInput })
+      .then((res) => {
+        if (res.success) {
+          const data: any = res.data
+          const output = data?.output || JSON.stringify(data)
+          setCustomOutput(String(output))
+          toast({ title: 'Custom test completed', description: 'Your code has been tested with custom input.' })
+        } else {
+          throw new Error(res.error || 'Run failed')
+        }
       })
-    }, 1500)
+      .catch(() => {
+        setCustomOutput('Execution failed')
+        toast({ title: 'Execution failed', description: 'Could not run custom input', variant: 'destructive' })
+      })
   }
 
   const handleViewProblem = () => {
@@ -237,19 +230,21 @@ export default function ProblemSolvePage() {
                       </Button>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h2 className="font-semibold">{mockProblem.title}</h2>
-                          <Badge variant="outline" className={cn("text-xs", getDifficultyColor(mockProblem.difficulty))}>
-                            {mockProblem.difficulty}
-                          </Badge>
+                          <h2 className="font-semibold">{problem?.title || 'Problem'}</h2>
+                          {problem?.difficulty && (
+                            <Badge variant="outline" className={cn("text-xs", getDifficultyColor(problem.difficulty))}>
+                              {problem.difficulty}
+                            </Badge>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {mockProblem.timeLimit}ms
+                            {problem?.timeLimit ?? '—'}ms
                           </div>
                           <div className="flex items-center gap-1">
                             <MemoryStick className="h-3 w-3" />
-                            {mockProblem.memoryLimit}MB
+                            {problem?.memoryLimit ?? '—'}MB
                           </div>
                         </div>
                       </div>
@@ -270,7 +265,7 @@ export default function ProblemSolvePage() {
                         Problem
                       </h3>
                       <div className="prose prose-sm prose-neutral dark:prose-invert max-w-none">
-                        <p className="whitespace-pre-line text-sm">{mockProblem.description}</p>
+                        <p className="whitespace-pre-line text-sm">{problem?.description || problem?.statement}</p>
                       </div>
                     </div>
 
@@ -278,7 +273,7 @@ export default function ProblemSolvePage() {
                     <div>
                       <h3 className="font-medium mb-3">Examples</h3>
                       <div className="space-y-4">
-                        {mockProblem.examples.map((example, index) => (
+                        {(problem?.examples || []).map((example, index) => (
                           <div key={index} className="space-y-2">
                             <div className="text-sm font-medium">Example {index + 1}:</div>
                             <div className="space-y-2">
@@ -295,7 +290,7 @@ export default function ProblemSolvePage() {
                                 <div className="text-xs">{example.explanation}</div>
                               </div>
                             </div>
-                            {index < mockProblem.examples.length - 1 && <Separator />}
+                            {index < (problem?.examples?.length || 0) - 1 && <Separator />}
                           </div>
                         ))}
                       </div>
@@ -368,8 +363,8 @@ export default function ProblemSolvePage() {
                           <TabsContent value="testcases" className="flex-1 m-0">
                             <ScrollArea className="h-full">
                               <div className="p-4 space-y-3">
-                                {testResults.map((testCase, index) => (
-                                  <Card key={testCase.id} className="p-3">
+                                {testResults.map((testCase: any, index) => (
+                                  <Card key={index} className="p-3">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-sm font-medium">Test Case {index + 1}</span>
                                       <div className="flex items-center gap-2">

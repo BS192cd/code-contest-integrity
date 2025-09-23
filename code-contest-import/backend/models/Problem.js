@@ -3,11 +3,13 @@ const mongoose = require('mongoose');
 const testCaseSchema = new mongoose.Schema({
   input: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   expectedOutput: {
     type: String,
-    required: true
+    required: true,
+    default: " "
   },
   isPublic: {
     type: Boolean,
@@ -23,11 +25,11 @@ const testCaseSchema = new mongoose.Schema({
   },
   timeLimit: {
     type: Number,
-    default: 2 // seconds
+    default: 2
   },
   memoryLimit: {
     type: Number,
-    default: 128 // MB
+    default: 128
   }
 });
 
@@ -37,6 +39,7 @@ const problemSchema = new mongoose.Schema({
     required: true,
     trim: true,
     maxlength: 200
+    // NO minlength validation - removed completely
   },
   statement: {
     type: String,
@@ -45,19 +48,23 @@ const problemSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   constraints: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   inputFormat: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   outputFormat: {
     type: String,
-    trim: true
+    trim: true,
+    default: ''
   },
   examples: [{
     input: {
@@ -66,7 +73,8 @@ const problemSchema = new mongoose.Schema({
     },
     output: {
       type: String,
-      required: true
+      required: true,
+      default: " "
     },
     explanation: {
       type: String,
@@ -88,11 +96,11 @@ const problemSchema = new mongoose.Schema({
     default: 'Algorithm'
   },
   timeLimit: {
-    type: Number, // in seconds
+    type: Number,
     default: 2
   },
   memoryLimit: {
-    type: Number, // in MB
+    type: Number,
     default: 128
   },
   testCases: [testCaseSchema],
@@ -170,7 +178,7 @@ const problemSchema = new mongoose.Schema({
   },
   source: {
     type: String,
-    default: 'Original' // Attribution for problem source
+    default: 'Original'
   },
   sourceUrl: {
     type: String,
@@ -181,26 +189,26 @@ const problemSchema = new mongoose.Schema({
     default: null
   },
   companies: [{
-    type: String // Companies that have asked this problem
+    type: String
   }],
   relatedProblems: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Problem'
   }],
   algorithmTags: [{
-    type: String // More specific algorithm tags
+    type: String
   }],
   dataStructureTags: [{
-    type: String // Specific data structure tags
+    type: String
   }],
   complexityAnalysis: {
     timeComplexity: {
       type: String,
-      default: null // e.g., "O(n log n)"
+      default: null
     },
     spaceComplexity: {
       type: String,
-      default: null // e.g., "O(n)"
+      default: null
     }
   },
   followUpQuestions: [{
@@ -208,7 +216,7 @@ const problemSchema = new mongoose.Schema({
   }],
   isVerified: {
     type: Boolean,
-    default: false // Whether the problem has been verified by admin
+    default: false
   },
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -223,7 +231,7 @@ const problemSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better query performance
+// Indexes
 problemSchema.index({ difficulty: 1 });
 problemSchema.index({ category: 1 });
 problemSchema.index({ tags: 1 });
@@ -233,6 +241,27 @@ problemSchema.index({ isPublic: 1, isActive: 1 });
 // Virtual for getting public test cases only
 problemSchema.virtual('publicTestCases').get(function() {
   return this.testCases.filter(tc => tc.isPublic);
+});
+
+// Pre-save middleware to handle empty strings
+problemSchema.pre('save', function(next) {
+  // Ensure expectedOutput is never empty
+  if (this.testCases && Array.isArray(this.testCases)) {
+    this.testCases = this.testCases.map(tc => ({
+      ...tc,
+      expectedOutput: tc.expectedOutput === null || tc.expectedOutput === undefined || tc.expectedOutput === "" ? " " : tc.expectedOutput
+    }));
+  }
+  
+  // Handle examples
+  if (this.examples && Array.isArray(this.examples)) {
+    this.examples = this.examples.map(example => ({
+      ...example,
+      output: example.output === null || example.output === undefined || example.output === "" ? " " : example.output
+    }));
+  }
+  
+  next();
 });
 
 // Method to calculate acceptance rate
@@ -252,12 +281,14 @@ problemSchema.methods.addSubmission = function(submissionId, isAccepted = false)
   return this.save();
 };
 
-// Method to get problem for contest (excludes some sensitive data)
+// Method to get problem for contest
 problemSchema.methods.getContestVersion = function() {
   const problemObject = this.toObject();
-  // Hide non-public test cases
   problemObject.testCases = this.publicTestCases;
+  delete problemObject.solutionTemplate;
+  delete problemObject.editorialUrl;
+  delete problemObject.hints;
   return problemObject;
 };
 
-module.exports = mongoose.model('Problem', problemSchema);
+module.exports = mongoose.models.Problem || mongoose.model('Problem', problemSchema);

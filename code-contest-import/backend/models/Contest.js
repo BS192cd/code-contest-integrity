@@ -206,4 +206,4 @@ contestSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('Contest', contestSchema);
+module.exports = mongoose.models.Contest || mongoose.model('Contest', contestSchema);

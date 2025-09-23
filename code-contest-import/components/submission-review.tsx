@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { AlertTriangle, CheckCircle, XCircle, User, Clock, Code, MessageSquare, RotateCcw, Edit } from "lucide-react"
+import { AlertTriangle, CheckCircle, XCircle, User, Clock, Code, MessageSquare, RotateCcw, Edit, Play } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 
 interface Submission {
   id: string
@@ -44,10 +45,87 @@ interface Submission {
 }
 
 interface SubmissionReviewProps {
-  submission: Submission
+  submission?: Submission
+  problemId?: string
+  onSolveClick?: () => void
 }
 
-export function SubmissionReview({ submission }: SubmissionReviewProps) {
+export function SubmissionsList({ problemId, onSolveClick }: SubmissionReviewProps) {
+  const { toast } = useToast()
+  const [submissions, setSubmissions] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      if (!problemId) return
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await apiClient.getSubmissions({ problemId })
+        if (res.success) {
+          setSubmissions((res.data as any[]) || [])
+        } else {
+          throw new Error(res.error || 'Failed to load submissions')
+        }
+      } catch (e: any) {
+        console.error(e)
+        setError(e.message || 'Failed to load submissions')
+        toast({ title: 'Failed to load submissions', description: 'Server unavailable', variant: 'destructive' })
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [problemId])
+
+  if (loading) {
+    return <div className="text-sm text-muted-foreground">Loading submissions...</div>
+  }
+  if (error) {
+    return <div className="text-sm text-destructive">{error}</div>
+  }
+  if (!submissions.length) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <Code className="h-12 w-12 mx-auto mb-4" />
+        <p>No submissions yet</p>
+        <p className="text-sm">Start solving to see your submissions here</p>
+        {onSolveClick && (
+          <Button className="mt-4" onClick={onSolveClick}>
+            <Play className="h-4 w-4 mr-2" />
+            Start Solving
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {submissions.map((s: any) => (
+        <Card key={s._id} className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-xs">{s.language}</Badge>
+              <span className="text-sm">{new Date(s.createdAt).toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={s.status === 'accepted' ? 'default' : 'destructive'} className="text-xs">
+                {String(s.status).replace(/_/g, ' ')}
+              </Badge>
+              {typeof s.score === 'number' && (
+                <Badge variant="outline" className="text-xs">Score: {s.score}</Badge>
+              )}
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+export function SubmissionReview({ submission }: { submission: Submission }) {
   const [comment, setComment] = useState("")
   const [manualScore, setManualScore] = useState(submission.score.toString())
   const [isRerunning, setIsRerunning] = useState(false)

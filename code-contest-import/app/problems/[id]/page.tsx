@@ -14,64 +14,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Play, Send } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 
-const mockProblem = {
-  id: 1,
-  title: "Two Sum",
-  difficulty: "Easy",
-  category: "Array",
-  description: `Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
-
-You may assume that each input would have exactly one solution, and you may not use the same element twice.
-
-You can return the answer in any order.`,
-  examples: [
-    {
-      input: "nums = [2,7,11,15], target = 9",
-      output: "[0,1]",
-      explanation: "Because nums[0] + nums[1] == 9, we return [0, 1].",
-    },
-    {
-      input: "nums = [3,2,4], target = 6",
-      output: "[1,2]",
-      explanation: "Because nums[1] + nums[2] == 6, we return [1, 2].",
-    },
-  ],
-  constraints: [
-    "2 ≤ nums.length ≤ 10⁴",
-    "-10⁹ ≤ nums[i] ≤ 10⁹",
-    "-10⁹ ≤ target ≤ 10⁹",
-    "Only one valid answer exists.",
-  ],
-  testCases: [
-    {
-      id: 1,
-      input: "[2,7,11,15]\n9",
-      expectedOutput: "[0,1]",
-      status: "passed" as const,
-      actualOutput: "[0,1]",
-      executionTime: "2ms",
-      memory: "42.1 MB",
-    },
-    {
-      id: 2,
-      input: "[3,2,4]\n6",
-      expectedOutput: "[1,2]",
-      status: "passed" as const,
-      actualOutput: "[1,2]",
-      executionTime: "1ms",
-      memory: "41.8 MB",
-    },
-    {
-      id: 3,
-      input: "[3,3]\n6",
-      expectedOutput: "[0,1]",
-      status: "failed" as const,
-      actualOutput: "[1,0]",
-      executionTime: "3ms",
-      memory: "42.3 MB",
-    },
-  ],
+interface ProblemDetails {
+  _id: string
+  title: string
+  difficulty: string
+  category?: string
+  description?: string
+  statement?: string
+  constraints?: string
+  examples?: { input: string; output: string; explanation?: string }[]
+  testCases?: { input: string; expectedOutput: string; isPublic?: boolean }[]
+  timeLimit?: number
+  memoryLimit?: number
+  solutionTemplate?: Record<string, string>
 }
 
 const defaultCode = {
@@ -113,33 +70,59 @@ export default function ProblemPage() {
   const [code, setCode] = useState(defaultCode.python)
   const [isRunning, setIsRunning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [testResults, setTestResults] = useState(mockProblem.testCases)
+  const [testResults, setTestResults] = useState<any[]>([])
+  const [problem, setProblem] = useState<ProblemDetails | null>(null)
+  const [loading, setLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
     setCode(defaultCode[language as keyof typeof defaultCode])
   }, [language])
 
+  useEffect(() => {
+    const loadProblem = async () => {
+      if (!params?.id) return
+      setLoading(true)
+      try {
+        const res = await apiClient.getProblem(String(params.id))
+        if (res.success) {
+          const p = res.data as any as ProblemDetails
+          setProblem(p)
+          setTestResults((p.testCases || []).filter(tc => (tc as any).isPublic))
+          if (p.solutionTemplate && p.solutionTemplate[language as keyof typeof p.solutionTemplate]) {
+            setCode(p.solutionTemplate[language as keyof typeof p.solutionTemplate] as string)
+          }
+        } else {
+          throw new Error(res.error || 'Failed to load problem')
+        }
+      } catch (e: any) {
+        console.error(e)
+        toast({ title: 'Failed to load problem', description: 'Server unavailable', variant: 'destructive' })
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadProblem()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.id])
+
   const handleRunCode = async () => {
     setIsRunning(true)
     try {
-      // Simulate code execution
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Simulate test results
-      const results = mockProblem.testCases.map((testCase, index) => ({
-        ...testCase,
-        status: Math.random() > 0.3 ? "passed" : ("failed" as const),
-        actualOutput: testCase.expectedOutput,
-        executionTime: `${Math.floor(Math.random() * 5) + 1}ms`,
-        memory: `${(Math.random() * 10 + 40).toFixed(1)} MB`,
-      }))
-
-      setTestResults(results)
-      toast({
-        title: "Code executed successfully",
-        description: `${results.filter((r) => r.status === "passed").length}/${results.length} test cases passed`,
-      })
+      const runRes = await apiClient.runCode({ code, language, input: '', problemId: String(params.id) })
+      if (runRes.success) {
+        const data: any = runRes.data
+        const results = data?.results || []
+        setTestResults(results.length ? results : [])
+        const passed = data?.passed ?? results.filter((r: any) => r.status === 'passed').length
+        const total = data?.total ?? results.length
+        toast({
+          title: "Code executed successfully",
+          description: `${passed}/${total} test cases passed`,
+        })
+      } else {
+        throw new Error(runRes.error || 'Failed to run code')
+      }
     } catch (error) {
       toast({
         title: "Execution failed",
@@ -154,13 +137,19 @@ export default function ProblemPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true)
     try {
-      // Simulate submission
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-
-      toast({
-        title: "Solution submitted!",
-        description: "Your solution has been submitted for evaluation.",
+      const res = await apiClient.submitSolution({
+        code,
+        language,
+        problemId: String(params.id),
       })
+      if (res.success) {
+        toast({
+          title: "Solution submitted!",
+          description: "Your solution has been submitted for evaluation.",
+        })
+      } else {
+        throw new Error(res.error || 'Submission failed')
+      }
     } catch (error) {
       toast({
         title: "Submission failed",
@@ -199,19 +188,23 @@ export default function ProblemPage() {
               <div className="p-6 space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold">{mockProblem.title}</h1>
-                    <Badge variant={getDifficultyColor(mockProblem.difficulty)}>{mockProblem.difficulty}</Badge>
-                    <Badge variant="outline">{mockProblem.category}</Badge>
+                    <h1 className="text-2xl font-bold">{problem?.title || (loading ? 'Loading...' : 'Problem')}</h1>
+                    {problem?.difficulty && (
+                      <Badge variant={getDifficultyColor(problem.difficulty)}>{problem.difficulty}</Badge>
+                    )}
+                    {problem?.category && (
+                      <Badge variant="outline">{problem.category}</Badge>
+                    )}
                   </div>
                 </div>
 
                 <div className="prose prose-sm max-w-none text-foreground">
-                  <p className="text-pretty leading-relaxed">{mockProblem.description}</p>
+                  <p className="text-pretty leading-relaxed">{problem?.description || problem?.statement}</p>
                 </div>
 
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Examples</h3>
-                  {mockProblem.examples.map((example, index) => (
+                  {(problem?.examples || []).map((example, index) => (
                     <Card key={index}>
                       <CardContent className="p-4 space-y-2">
                         <div>
@@ -233,14 +226,12 @@ export default function ProblemPage() {
 
                 <div className="space-y-2">
                   <h3 className="text-lg font-semibold">Constraints</h3>
-                  <ul className="space-y-1 text-sm text-muted-foreground">
-                    {mockProblem.constraints.map((constraint, index) => (
-                      <li key={index} className="flex items-center gap-2">
-                        <span className="w-1 h-1 bg-muted-foreground rounded-full" />
-                        <code className="font-mono">{constraint}</code>
-                      </li>
-                    ))}
-                  </ul>
+                  {(problem?.constraints ? String(problem.constraints).split('\n') : []).map((constraint, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <span className="w-1 h-1 bg-muted-foreground rounded-full" />
+                      <code className="font-mono">{constraint}</code>
+                    </li>
+                  ))}
                 </div>
               </div>
             </ScrollArea>
