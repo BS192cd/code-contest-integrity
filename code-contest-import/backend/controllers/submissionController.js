@@ -3,8 +3,24 @@ const Problem = require('../models/Problem');
 const Contest = require('../models/Contest');
 const User = require('../models/User');
 const judge0Service = require('../services/judge0Service');
+const enhancedJudge0Service = require('../services/enhancedJudge0Service');
+const batchJudge0Service = require('../services/batchJudge0Service');
+const pistonService = require('../services/pistonService');
 const plagiarismService = require('../services/plagiarismService');
+const enhancedPlagiarismService = require('../services/enhancedPlagiarismService');
 const { serializeMongooseData } = require('../utils/serialization');
+
+// Get execution service based on environment configuration
+const getExecutionService = () => {
+  const engine = process.env.CODE_EXECUTION_ENGINE || 'piston';
+  
+  // Use batch processing for Judge0 when there are many test cases
+  if (engine === 'judge0') {
+    return batchJudge0Service;
+  }
+  
+  return engine === 'piston' ? pistonService : enhancedJudge0Service;
+};
 
 // Submit solution
 const submitSolution = async (req, res) => {
@@ -236,37 +252,118 @@ const executeSubmission = async (submissionId, problem) => {
       await global.leaderboardSocket.broadcastNewSubmission(submission);
     }
 
-    console.log(`🔄 Executing submission ${submissionId} for problem: ${problem.title}`);
+    console.log(`Executing submission ${submissionId} for problem: ${problem.title}`);
+    
+    // DEBUG: Log what we're seeing
+    console.log(`DEBUG - testCases length: ${problem.testCases?.length || 0}`);
+    console.log(`DEBUG - visibleTestCases length: ${problem.visibleTestCases?.length || 0}`);
+    console.log(`DEBUG - hiddenTestCases length: ${problem.hiddenTestCases?.length || 0}`);
 
-    // Execute against test cases
-    const testResults = await judge0Service.executeWithTestCases(
+    // Get test cases - handle both old and new formats
+    let allTestCases = [];
+    let visibleCount = 0;
+    let hiddenCount = 0;
+    
+    if (problem.testCases && problem.testCases.length > 0) {
+      // New format: testCases array with isHidden flag
+      allTestCases = problem.testCases;
+      visibleCount = problem.testCases.filter(tc => !tc.isHidden).length;
+      hiddenCount = problem.testCases.filter(tc => tc.isHidden).length;
+      console.log(`DEBUG - Using NEW format (testCases array)`);
+    } else {
+      // Old format: separate visibleTestCases and hiddenTestCases arrays
+      allTestCases = [
+        ...(problem.visibleTestCases || []),
+        ...(problem.hiddenTestCases || [])
+      ];
+      visibleCount = problem.visibleTestCases?.length || 0;
+      hiddenCount = problem.hiddenTestCases?.length || 0;
+      console.log(`DEBUG - Using OLD format (separate arrays)`);
+    }
+
+    console.log(`📊 Total test cases: ${allTestCases.length} (${visibleCount} visible + ${hiddenCount} hidden)`);
+
+    if (allTestCases.length === 0) {
+      throw new Error('No test cases configured for this problem');
+    }
+
+    // Execute against test cases using configured service (Piston or Judge0)
+    // Convert Mongoose document to plain object for universal wrapper
+    const problemData = problem.toObject ? problem.toObject() : problem;
+    const executionService = getExecutionService();
+    
+    const testResults = await executionService.executeWithTestCases(
       submission.code,
       submission.language,
-      problem.testCases,
-      problem.timeLimit,
-      problem.memoryLimit
+      allTestCases,
+      problem.timeLimit || 2,
+      problem.memoryLimit || 256,
+      problem.title || '',
+      problemData
     );
 
-    // Calculate score and status
-    const passedTests = testResults.filter(tr => tr.status === 'passed').length;
+    // Calculate score and status with separate tracking for visible/hidden tests
+    const visibleResults = testResults.slice(0, visibleCount);
+    const hiddenResults = testResults.slice(visibleCount);
+    
+    const passedVisible = visibleResults.filter(tr => tr.status === 'passed').length;
+    const passedHidden = hiddenResults.filter(tr => tr.status === 'passed').length;
+    const passedTests = passedVisible + passedHidden;
     const totalTests = testResults.length;
     const score = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
     
     // Determine final status
     let finalStatus = 'accepted';
+    let statusMessage = '';
+    
     if (passedTests === 0) {
       finalStatus = 'wrong_answer';
+      statusMessage = 'All test cases failed';
     } else if (passedTests < totalTests) {
       // Check for specific error types
       const hasRuntimeError = testResults.some(tr => tr.status === 'runtime_error');
       const hasTLE = testResults.some(tr => tr.status === 'tle');
       const hasMLE = testResults.some(tr => tr.status === 'mle');
       
-      if (hasRuntimeError) finalStatus = 'runtime_error';
-      else if (hasTLE) finalStatus = 'time_limit_exceeded';
-      else if (hasMLE) finalStatus = 'memory_limit_exceeded';
-      else finalStatus = 'wrong_answer';
+      if (hasRuntimeError) {
+        finalStatus = 'runtime_error';
+        statusMessage = 'Runtime error occurred';
+      } else if (hasTLE) {
+        finalStatus = 'time_limit_exceeded';
+        statusMessage = 'Time limit exceeded';
+      } else if (hasMLE) {
+        finalStatus = 'memory_limit_exceeded';
+        statusMessage = 'Memory limit exceeded';
+      } else {
+        finalStatus = 'wrong_answer';
+        if (hiddenCount > 0) {
+          statusMessage = `Passed ${passedVisible}/${visibleCount} visible tests, ${passedHidden}/${hiddenCount} hidden tests`;
+        } else {
+          statusMessage = `Passed ${passedTests}/${totalTests} test cases`;
+        }
+      }
+    } else {
+      statusMessage = `All test cases passed! (${visibleCount} visible + ${hiddenCount} hidden)`;
     }
+    
+    // Store test case statistics
+    submission.testCaseStats = {
+      total: totalTests,
+      passed: passedTests,
+      failed: totalTests - passedTests,
+      visible: {
+        total: visibleCount,
+        passed: passedVisible,
+        failed: visibleCount - passedVisible
+      },
+      hidden: {
+        total: hiddenCount,
+        passed: passedHidden,
+        failed: hiddenCount - passedHidden
+      }
+    };
+    
+    submission.statusMessage = statusMessage;
 
     // Update submission with results
     submission.testResults = testResults;
@@ -398,9 +495,17 @@ const updateProblemStatistics = async (problemId, isAccepted, score) => {
     const problem = await Problem.findByIdAndUpdate(problemId, updateQuery, { new: true });
     
     // Calculate acceptance rate and average score
-    if (problem && problem.statistics.totalSubmissions > 0) {
-      problem.statistics.acceptanceRate = (problem.statistics.acceptedSubmissions / problem.statistics.totalSubmissions) * 100;
-      problem.statistics.averageScore = problem.statistics.totalScore / problem.statistics.totalSubmissions;
+    if (problem && problem.statistics && problem.statistics.totalSubmissions > 0) {
+      const totalSubmissions = problem.statistics.totalSubmissions || 0;
+      const acceptedSubmissions = problem.statistics.acceptedSubmissions || 0;
+      const totalScore = problem.statistics.totalScore || 0;
+      
+      problem.statistics.acceptanceRate = totalSubmissions > 0 
+        ? (acceptedSubmissions / totalSubmissions) * 100 
+        : 0;
+      problem.statistics.averageScore = totalSubmissions > 0 
+        ? totalScore / totalSubmissions 
+        : 0;
       await problem.save();
     }
 
@@ -453,6 +558,8 @@ const logActivity = async (activityData) => {
     const activity = new ActivityLog({
       userId: activityData.userId,
       action: activityData.action,
+      entityType: activityData.entityType || 'submission',  // Default to submission
+      entityId: activityData.entityId || activityData.details?.submissionId,  // Use submissionId from details if not provided
       details: activityData.details,
       timestamp: activityData.timestamp || new Date(),
       ipAddress: activityData.ipAddress,
@@ -592,7 +699,7 @@ const checkPlagiarism = async (submission) => {
     // Check similarity with other submissions
     for (const otherSubmission of otherSubmissions) {
       try {
-        const comparison = await plagiarismService.compareSubmissions(
+        const comparison = await enhancedPlagiarismService.compareSubmissions(
           submission, 
           otherSubmission
         );
@@ -610,7 +717,7 @@ const checkPlagiarism = async (submission) => {
 
           // If high similarity, update both submissions
           if (comparison.similarity >= 70) {
-            await plagiarismService.updateSubmissionPlagiarismScore(
+            await enhancedPlagiarismService.updateSubmissionPlagiarismScore(
               otherSubmission._id,
               Math.max(otherSubmission.plagiarismCheck?.score || 0, comparison.similarity),
               [{ 
@@ -631,7 +738,7 @@ const checkPlagiarism = async (submission) => {
     // Check similarity with user's own historical submissions
     for (const prev of selfSubmissions) {
       try {
-        const comparison = await plagiarismService.compareSubmissions(
+        const comparison = await enhancedPlagiarismService.compareSubmissions(
           submission,
           prev
         );
@@ -653,7 +760,7 @@ const checkPlagiarism = async (submission) => {
 
     // Update current submission's plagiarism data
     if (similarSubmissions.length > 0) {
-      await plagiarismService.updateSubmissionPlagiarismScore(
+      await enhancedPlagiarismService.updateSubmissionPlagiarismScore(
         submission._id,
         maxSimilarity,
         similarSubmissions
@@ -731,19 +838,51 @@ const runCode = async (req, res) => {
       });
     }
 
-    // If problemId provided, run against public (sample) test cases
+    // If problemId provided, run against public (visible) test cases
     if (problemId) {
-      const problem = await Problem.findById(problemId).lean();
+      // Force fresh fetch from database - bypass any caching by using findOne with exec()
+      const problem = await Problem.findOne({ _id: problemId }).exec();
       if (!problem) {
         return res.status(404).json({ success: false, error: 'Problem not found' });
       }
-      const publicTests = (problem.testCases || []).filter(tc => tc.isPublic);
-      const results = await judge0Service.executeWithTestCases(
+      
+      // Convert to plain object to get fresh data
+      const problemData = problem.toObject();
+      
+      // CRITICAL FIX: Use testCases (new unified schema) ONLY - ignore old visibleTestCases
+      // This prevents cache issues where old visibleTestCases are used instead of updated testCases
+      let publicTests = [];
+      
+      if (problemData.testCases && problemData.testCases.length > 0) {
+        // Use testCases array - filter for non-hidden test cases
+        publicTests = problemData.testCases.filter(tc => tc.isPublic === true || tc.isHidden === false);
+        
+        // If no public tests found, use all test cases (for problems without visibility flags)
+        if (publicTests.length === 0) {
+          publicTests = problemData.testCases;
+        }
+      }
+      
+      console.log(`🧪 Running code against ${publicTests.length} test cases for problem: ${problemData.title}`);
+      console.log(`📝 First test case input: ${publicTests[0]?.input?.substring(0, 50)}...`);
+      console.log(`📝 First test case expected: ${publicTests[0]?.expectedOutput || publicTests[0]?.output}`);
+      
+      if (publicTests.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'No test cases available for this problem' 
+        });
+      }
+      const executionService = getExecutionService();
+      
+      const results = await executionService.executeWithTestCases(
         code,
         language,
         publicTests,
-        problem.timeLimit,
-        problem.memoryLimit
+        problem.timeLimit || 2,
+        problem.memoryLimit || 256,
+        problem.title || '',
+        problemData
       );
 
       return res.json({

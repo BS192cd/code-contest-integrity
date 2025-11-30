@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Menu, Code, Trophy, Users, User, Settings, LogOut } from "lucide-react"
+import { Menu, Code, Trophy, Users, User, Settings, LogOut, User2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
@@ -17,13 +17,16 @@ const navigation = [
   { name: "Contests", href: "/dashboard", icon: Trophy },
   { name: "Problems", href: "/problems", icon: Code },
   { name: "Leaderboard", href: "/leaderboard", icon: Users },
-  { name: "Profile", href: "/profile", icon: User },
 ]
 
 export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const router = useRouter()
+
+  const handleProfile = () => {
+    router.push("/profile")
+  }
 
   const handleLogout = () => {
     logout()
@@ -79,15 +82,30 @@ export function DashboardHeader({ onMenuToggle }: DashboardHeaderProps) {
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/diverse-user-avatars.png" alt="User" />
                 <AvatarFallback>
-                  {user?.name
+                  {user?.fullName
                     ?.split(" ")
-                    .map((n) => n[0])
+                    .map((n: string) => n[0])
                     .join("") || "U"}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56" align="end" forceMount>
+            <div className="flex items-center justify-start gap-2 p-2">
+              <div className="flex flex-col space-y-1 leading-none">
+                {user?.fullName && <p className="font-medium">{user.fullName}</p>}
+                {user?.email && (
+                  <p className="w-[200px] truncate text-sm text-muted-foreground">
+                    {user.email}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="h-px bg-border my-1" />
+            <DropdownMenuItem onClick={handleProfile}>
+              <User2 className="mr-2 h-4 w-4" />
+              View Profile
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={handleSettings}>
               <Settings className="mr-2 h-4 w-4" />
               Settings

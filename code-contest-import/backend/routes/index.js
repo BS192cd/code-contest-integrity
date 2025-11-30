@@ -10,6 +10,11 @@ const leaderboardRoutes = require('./leaderboard');
 const analyticsRoutes = require('./analytics');
 const plagiarismRoutes = require('./plagiarism');
 const uploadRoutes = require('./upload');
+const teacherRoutes = require('./teachers');
+const studentRoutes = require('./students');
+const classRoutes = require('./classes');
+const geminiTestCasesRoutes = require('./geminiTestCases');
+const judge0StatusRoutes = require('./judge0Status');
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -35,7 +40,12 @@ router.get('/', (req, res) => {
       leaderboard: '/api/leaderboard',
       analytics: '/api/analytics',
       plagiarism: '/api/plagiarism',
-      upload: '/api/upload'
+      upload: '/api/upload',
+      teachers: '/api/teachers',
+      students: '/api/students',
+      classes: '/api/classes',
+      geminiTestCases: '/api/gemini-test-cases',
+      judge0Status: '/api/judge0-status'
     },
     documentation: 'https://docs.codecontest.com/api'
   });
@@ -50,5 +60,10 @@ router.use('/leaderboard', leaderboardRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/plagiarism', plagiarismRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/teachers', teacherRoutes);
+router.use('/students', studentRoutes);
+router.use('/classes', classRoutes);
+router.use('/gemini-test-cases', geminiTestCasesRoutes);
+router.use('/judge0-status', judge0StatusRoutes);
 
 module.exports = router;

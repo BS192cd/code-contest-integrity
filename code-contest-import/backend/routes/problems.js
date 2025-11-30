@@ -20,4 +20,7 @@ router.post('/:id/test-cases', authenticate, requireTeacher, validate(problemSch
 router.put('/:id/test-cases/:testCaseId', authenticate, requireTeacher, problemController.updateTestCase);
 router.delete('/:id/test-cases/:testCaseId', authenticate, requireTeacher, problemController.deleteTestCase);
 
+// Generate test cases (teachers only)
+router.post('/:id/generate-test-cases', authenticate, requireTeacher, problemController.generateTestCases);
+
 module.exports = router;

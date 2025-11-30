@@ -13,7 +13,8 @@ const getContests = async (req, res) => {
       status = 'all', 
       difficulty = 'all', 
       search = '', 
-      tags = '' 
+      tags = '',
+      teacherId = '' 
     } = req.query;
 
     const query = {};
@@ -37,6 +38,11 @@ const getContests = async (req, res) => {
     if (tags) {
       const tagArray = tags.split(',').map(tag => tag.trim());
       query.tags = { $in: tagArray };
+    }
+
+    // Filter by teacher ID if provided
+    if (teacherId) {
+      query.createdBy = teacherId;
     }
 
     // Only show public contests to students, unless they created it
@@ -91,6 +97,14 @@ const getContests = async (req, res) => {
 const getContest = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contest ID format'
+      });
+    }
     
     const contest = await Contest.findById(id)
       .populate('createdBy', 'username fullName')
@@ -104,7 +118,8 @@ const getContest = async (req, res) => {
     if (!contest) {
       return res.status(404).json({
         success: false,
-        error: 'Contest not found'
+        error: 'Contest not found',
+        message: `No contest found with ID: ${id}`
       });
     }
 
@@ -114,7 +129,8 @@ const getContest = async (req, res) => {
         contest.createdBy._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied to private contest'
+        error: 'Access denied',
+        message: 'You do not have permission to view this private contest'
       });
     }
 
@@ -134,9 +150,19 @@ const getContest = async (req, res) => {
 
   } catch (error) {
     console.error('Get contest error:', error);
+
+    // Handle CastError (invalid ObjectId)
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contest ID format'
+      });
+    }
+
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch contest'
+      error: 'Failed to fetch contest',
+      message: error.message
     });
   }
 };
@@ -144,22 +170,70 @@ const getContest = async (req, res) => {
 // Create new contest (teachers only)
 const createContest = async (req, res) => {
   try {
+    const { title, description, startTime, endTime, problems } = req.body;
+
+    // Validate required fields
+    if (!title || !startTime || !endTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        details: {
+          title: !title ? 'Title is required' : null,
+          startTime: !startTime ? 'Start time is required' : null,
+          endTime: !endTime ? 'End time is required' : null
+        }
+      });
+    }
+
+    // Validate dates
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format',
+        message: 'Start time and end time must be valid dates'
+      });
+    }
+
+    if (start >= end) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date range',
+        message: 'End time must be after start time'
+      });
+    }
+
+    // Validate problems exist if provided
+    if (problems && problems.length > 0) {
+      const problemIds = problems.map(p => p.problem || p);
+      const existingProblems = await Problem.find({ _id: { $in: problemIds } });
+      
+      if (existingProblems.length !== problemIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid problems',
+          message: 'One or more problems not found'
+        });
+      }
+    }
+
+    // Create contest data
     const contestData = {
       ...req.body,
-      createdBy: req.user._id
+      createdBy: req.user._id,
+      duration: Math.round((end - start) / (1000 * 60)) // Duration in minutes
     };
-
-    // Calculate duration in minutes
-    const startTime = new Date(contestData.startTime);
-    const endTime = new Date(contestData.endTime);
-    contestData.duration = Math.round((endTime - startTime) / (1000 * 60));
 
     const contest = new Contest(contestData);
     await contest.save();
 
     // Populate references for response
     await contest.populate('createdBy', 'username fullName');
-    await contest.populate('problems.problem', 'title difficulty');
+    if (problems && problems.length > 0) {
+      await contest.populate('problems.problem', 'title difficulty');
+    }
 
     // Add contest ID to user's created contests
     await User.findByIdAndUpdate(req.user._id, {
@@ -174,9 +248,23 @@ const createContest = async (req, res) => {
 
   } catch (error) {
     console.error('Create contest error:', error);
+    
+    // Handle specific MongoDB errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: Object.keys(error.errors).reduce((acc, key) => {
+          acc[key] = error.errors[key].message;
+          return acc;
+        }, {})
+      });
+    }
+
     res.status(500).json({
       success: false,
-      error: 'Failed to create contest'
+      error: 'Failed to create contest',
+      message: error.message
     });
   }
 };
@@ -187,12 +275,21 @@ const updateContest = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
+    // Validate ObjectId format
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contest ID format'
+      });
+    }
+
     const contest = await Contest.findById(id);
     
     if (!contest) {
       return res.status(404).json({
         success: false,
-        error: 'Contest not found'
+        error: 'Contest not found',
+        message: `No contest found with ID: ${id}`
       });
     }
 
@@ -201,7 +298,8 @@ const updateContest = async (req, res) => {
         contest.createdBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        error: 'Not authorized to update this contest'
+        error: 'Not authorized',
+        message: 'You do not have permission to update this contest'
       });
     }
 
@@ -209,15 +307,47 @@ const updateContest = async (req, res) => {
     if (contest.status === 'active') {
       return res.status(400).json({
         success: false,
-        error: 'Cannot update active contest'
+        error: 'Cannot update active contest',
+        message: 'Contest is currently active and cannot be modified'
       });
     }
 
-    // Recalculate duration if times are updated
+    // Validate date updates if provided
     if (updates.startTime || updates.endTime) {
       const startTime = new Date(updates.startTime || contest.startTime);
       const endTime = new Date(updates.endTime || contest.endTime);
+
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date format',
+          message: 'Start time and end time must be valid dates'
+        });
+      }
+
+      if (startTime >= endTime) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date range',
+          message: 'End time must be after start time'
+        });
+      }
+
       updates.duration = Math.round((endTime - startTime) / (1000 * 60));
+    }
+
+    // Validate problems if provided
+    if (updates.problems && updates.problems.length > 0) {
+      const problemIds = updates.problems.map(p => p.problem || p);
+      const existingProblems = await Problem.find({ _id: { $in: problemIds } });
+      
+      if (existingProblems.length !== problemIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid problems',
+          message: 'One or more problems not found'
+        });
+      }
     }
 
     Object.assign(contest, updates);
@@ -234,9 +364,30 @@ const updateContest = async (req, res) => {
 
   } catch (error) {
     console.error('Update contest error:', error);
+
+    // Handle specific MongoDB errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: Object.keys(error.errors).reduce((acc, key) => {
+          acc[key] = error.errors[key].message;
+          return acc;
+        }, {})
+      });
+    }
+
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid contest ID format'
+      });
+    }
+
     res.status(500).json({
       success: false,
-      error: 'Failed to update contest'
+      error: 'Failed to update contest',
+      message: error.message
     });
   }
 };

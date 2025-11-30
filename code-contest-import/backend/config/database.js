@@ -50,6 +50,7 @@ const connectDB = async () => {
     }
 
     console.log('🔗 Connecting to MongoDB Atlas...');
+    console.log('📋 Database name from URI:', mongoUri.split('/')[3]?.split('?')[0] || 'NOT SPECIFIED');
     
     const conn = await mongoose.connect(mongoUri, {
       useNewUrlParser: true,
@@ -57,6 +58,7 @@ const connectDB = async () => {
     });
 
     console.log(`✅ MongoDB Atlas Connected: ${conn.connection.host}`);
+    console.log(`📊 Using database: ${conn.connection.db.databaseName}`);
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error.message);
     if (process.env.NODE_ENV === 'production') {

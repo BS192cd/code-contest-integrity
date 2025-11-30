@@ -3,19 +3,29 @@ const router = express.Router();
 
 const submissionController = require('../controllers/submissionController');
 const submissionViewController = require('../controllers/submissionViewController');
-const { authenticate, requireTeacher } = require('../middleware/auth');
+const { authenticate, requireTeacher, optionalAuth } = require('../middleware/auth');
 const { validate, submissionSchemas, querySchemas } = require('../middleware/validation');
 const { loggers } = require('../middleware/activityLogger');
 
-// All submission routes require authentication
+// Execute code with custom input (run endpoint) - allow without auth for testing
+router.post('/run', 
+  loggers.custom('code_executed'),
+  submissionController.runCode
+);
+
+// All other submission routes require authentication
 router.use(authenticate);
 
-// Submit solution (with activity logging)
+// Submit solution (with enhanced test case validation)
 router.post('/', 
   loggers.submitCode,
   validate(submissionSchemas.create), 
   submissionController.submitSolution
 );
+
+// Enhanced submission endpoints (temporarily disabled)
+// router.get('/problem/:problemId/user', enhancedSubmissionController.getUserSubmissions);
+// router.get('/admin/all', requireTeacher, enhancedSubmissionController.getAllSubmissions);
 
 // Get submissions (enhanced with filtering and real-time updates)
 router.get('/', 
@@ -37,12 +47,6 @@ router.get('/stats/:userId?',
 // Get contest submission feed (real-time)
 router.get('/contest/:contestId/feed', 
   submissionViewController.getContestSubmissionFeed
-);
-
-// Execute code with custom input (run endpoint)
-router.post('/run', 
-  loggers.custom('code_executed'),
-  submissionController.runCode
 );
 
 // Rerun submission (teachers/admin only)  

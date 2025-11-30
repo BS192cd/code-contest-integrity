@@ -1,37 +1,16 @@
 const mongoose = require('mongoose');
 
-const testCaseSchema = new mongoose.Schema({
-  input: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  expectedOutput: {
-    type: String,
-    required: true,
-    default: " "
-  },
-  isPublic: {
-    type: Boolean,
-    default: false
-  },
-  points: {
-    type: Number,
-    default: 10
-  },
-  explanation: {
-    type: String,
-    default: ''
-  },
-  timeLimit: {
-    type: Number,
-    default: 2
-  },
-  memoryLimit: {
-    type: Number,
-    default: 128
-  }
+const visibleTestCaseSchema = new mongoose.Schema({
+  input: { type: String, required: true },
+  output: { type: String, required: true },
+  explanation: { type: String, required: true }
 });
+
+const hiddenTestCaseSchema = new mongoose.Schema({
+  input: { type: String, required: true },
+  output: { type: String, required: true }
+});
+
 
 const problemSchema = new mongoose.Schema({
   title: {
@@ -41,21 +20,13 @@ const problemSchema = new mongoose.Schema({
     maxlength: 200
     // NO minlength validation - removed completely
   },
-  statement: {
-    type: String,
-    required: true,
-    trim: true
-  },
   description: {
     type: String,
+    required: true,
     trim: true,
-    default: ''
+    minlength: 10 // Reduced from 500 to allow shorter descriptions
   },
-  constraints: {
-    type: String,
-    trim: true,
-    default: ''
-  },
+  constraints: { type: mongoose.Schema.Types.Mixed },
   inputFormat: {
     type: String,
     trim: true,
@@ -83,7 +54,7 @@ const problemSchema = new mongoose.Schema({
   }],
   difficulty: {
     type: String,
-    enum: ['Easy', 'Medium', 'Hard', 'Expert'],
+    enum: ['easy', 'medium', 'hard'],
     required: true
   },
   tags: [{
@@ -103,7 +74,17 @@ const problemSchema = new mongoose.Schema({
     type: Number,
     default: 128
   },
-  testCases: [testCaseSchema],
+  visibleTestCases: [visibleTestCaseSchema],
+  hiddenTestCases: [hiddenTestCaseSchema],
+  testCases: [{
+    input: { type: String, required: true },
+    expectedOutput: { type: String, required: true },
+    isPublic: { type: Boolean, default: true },
+    isHidden: { type: Boolean, default: false },
+    explanation: { type: String, default: '' },
+    points: { type: Number, default: 10 },
+    order: { type: Number, default: 0 }
+  }],
   submissions: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Submission'
@@ -154,6 +135,7 @@ const problemSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  solutionStub: { type: String },
   solutionTemplate: {
     python: {
       type: String,
@@ -175,6 +157,50 @@ const problemSchema = new mongoose.Schema({
       type: String,
       default: ''
     }
+  },
+  
+  // Universal wrapper metadata (flexible schema)
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+    description: 'Universal wrapper configuration for automatic I/O handling'
+  },
+  
+  // Universal wrapper system fields
+  executionType: {
+    type: String,
+    enum: ['function', 'program', 'custom'],
+    default: 'function',
+    description: 'How the code should be executed'
+  },
+  
+  signature: {
+    functionName: {
+      type: String,
+      description: 'Name of the function to call'
+    },
+    returnType: {
+      type: String,
+      description: 'Return type of the function'
+    },
+    parameters: [{
+      name: {
+        type: String,
+        required: true
+      },
+      type: {
+        type: String,
+        required: true
+      },
+      description: String
+    }]
+  },
+  
+  problemCategory: {
+    type: String,
+    enum: ['array', 'string', 'linkedlist', 'tree', 'graph', 'dp', 'math', 'other'],
+    default: 'other',
+    description: 'Category for template selection'
   },
   source: {
     type: String,
@@ -240,16 +266,22 @@ problemSchema.index({ isPublic: 1, isActive: 1 });
 
 // Virtual for getting public test cases only
 problemSchema.virtual('publicTestCases').get(function() {
-  return this.testCases.filter(tc => tc.isPublic);
+  return this.visibleTestCases;
 });
 
 // Pre-save middleware to handle empty strings
 problemSchema.pre('save', function(next) {
   // Ensure expectedOutput is never empty
-  if (this.testCases && Array.isArray(this.testCases)) {
-    this.testCases = this.testCases.map(tc => ({
+  if (this.visibleTestCases && Array.isArray(this.visibleTestCases)) {
+    this.visibleTestCases = this.visibleTestCases.map(tc => ({
       ...tc,
-      expectedOutput: tc.expectedOutput === null || tc.expectedOutput === undefined || tc.expectedOutput === "" ? " " : tc.expectedOutput
+      output: tc.output === null || tc.output === undefined || tc.output === "" ? " " : tc.output
+    }));
+  }
+  if (this.hiddenTestCases && Array.isArray(this.hiddenTestCases)) {
+    this.hiddenTestCases = this.hiddenTestCases.map(tc => ({
+      ...tc,
+      output: tc.output === null || tc.output === undefined || tc.output === "" ? " " : tc.output
     }));
   }
   

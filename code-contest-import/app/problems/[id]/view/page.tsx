@@ -83,7 +83,7 @@ export default function ProblemViewPage() {
   }
 
   return (
-    <ProtectedRoute requiredRole="student">
+    <ProtectedRoute>
       <div className="min-h-screen bg-background">
         <DashboardHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
 

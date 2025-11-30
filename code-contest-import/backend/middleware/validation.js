@@ -29,7 +29,10 @@ const validate = (schema, property = 'body') => {
 // User validation schemas
 const userSchemas = {
   register: Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
+    username: Joi.string().pattern(/^[a-zA-Z0-9_]+$/).min(3).max(30).required()
+      .messages({
+        'string.pattern.base': 'Username can only contain letters, numbers, and underscores'
+      }),
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
     fullName: Joi.string().min(2).max(100).required(),
@@ -98,8 +101,6 @@ const contestSchemas = {
     maxParticipants: Joi.number().integer().min(1).max(10000),
     isPublic: Joi.boolean(),
     registrationRequired: Joi.boolean(),
-    prize: Joi.string().max(200).allow(null, ''),
-    tags: Joi.array().items(Joi.string().min(1).max(50)).max(10)
   }).min(1)
 };
 
@@ -107,25 +108,101 @@ const contestSchemas = {
 const problemSchemas = {
   create: Joi.object({
     title: Joi.string().min(5).max(200).required(),
-    statement: Joi.string().min(20).required(),
-    description: Joi.string(),
-    constraints: Joi.string(),
+    description: Joi.string().min(10).required(), // Reduced from 500 to 10
+    constraints: Joi.any(),
     inputFormat: Joi.string(),
     outputFormat: Joi.string(),
-    examples: Joi.array().items(
+    visibleTestCases: Joi.array().items(
       Joi.object({
         input: Joi.string().required(),
         output: Joi.string().required(),
-        explanation: Joi.string().default('')
+        explanation: Joi.string().required()
       })
-    ).min(1).required(),
-    difficulty: Joi.string().valid('Easy', 'Medium', 'Hard', 'Expert').required(),
+    ),
+    hiddenTestCases: Joi.array().items(
+      Joi.object({
+        input: Joi.string().required(),
+        output: Joi.string().required()
+      })
+    ),
+    difficulty: Joi.string().valid('easy', 'medium', 'hard').required(),
     tags: Joi.array().items(Joi.string().min(1).max(50)).max(10),
     category: Joi.string().valid('Algorithm', 'Data Structure', 'Mathematics', 'String Processing', 'Graph Theory', 'Dynamic Programming', 'Other').default('Algorithm'),
     timeLimit: Joi.number().min(0.5).max(10).default(2),
     memoryLimit: Joi.number().integer().min(64).max(512).default(128),
+    solutionStub: Joi.string(),
     isPublic: Joi.boolean().default(true)
   }),
+
+  update: Joi.object({
+    title: Joi.string().min(5).max(200),
+    description: Joi.string().min(10), // Reduced from 500 to 10
+    statement: Joi.string(), // Allow but ignore
+    constraints: Joi.any(),
+    inputFormat: Joi.string().allow(''),
+    outputFormat: Joi.string().allow(''),
+    sampleInput: Joi.string().allow(''), // Allow but ignore
+    sampleOutput: Joi.string().allow(''), // Allow but ignore
+    examples: Joi.array().items(
+      Joi.object({
+        input: Joi.string().required(),
+        output: Joi.string().required(),
+        explanation: Joi.string().allow('')
+      })
+    ),
+    testCases: Joi.array().items(
+      Joi.object({
+        input: Joi.string().allow(''),
+        expectedOutput: Joi.string().allow(''),
+        output: Joi.string().allow(''), // Allow both formats
+        explanation: Joi.string().allow(''),
+        isPublic: Joi.boolean(),
+        isHidden: Joi.boolean(),
+        points: Joi.number(),
+        order: Joi.number()
+      })
+    ),
+    visibleTestCases: Joi.array().items(
+      Joi.object({
+        input: Joi.string().allow(''),
+        output: Joi.string().allow(''),
+        explanation: Joi.string().allow('')
+      })
+    ),
+    hiddenTestCases: Joi.array().items(
+      Joi.object({
+        input: Joi.string().allow(''),
+        output: Joi.string().allow('')
+      })
+    ),
+    difficulty: Joi.string().valid('easy', 'medium', 'hard'),
+    tags: Joi.array().items(Joi.string().min(1).max(50)).max(10),
+    category: Joi.string().valid('Algorithm', 'Data Structure', 'Mathematics', 'String Processing', 'Graph Theory', 'Dynamic Programming', 'Other', 'General'),
+    timeLimit: Joi.number().min(0.5).max(10000),
+    memoryLimit: Joi.number().integer().min(64).max(2048),
+    solutionStub: Joi.string().allow(''),
+    solutionTemplate: Joi.object({
+      python: Joi.string().allow(''),
+      javascript: Joi.string().allow(''),
+      java: Joi.string().allow(''),
+      cpp: Joi.string().allow(''),
+      c: Joi.string().allow('')
+    }),
+    hints: Joi.array().items(
+      Joi.object({
+        level: Joi.number().min(1).max(3),
+        content: Joi.string()
+      })
+    ),
+    isPublic: Joi.boolean(),
+    isActive: Joi.boolean(),
+    metadata: Joi.any(),
+    signature: Joi.any(),
+    executionType: Joi.string().valid('function', 'program', 'custom'),
+    problemCategory: Joi.string(),
+    source: Joi.string().allow(''),
+    sourceUrl: Joi.string().allow('')
+  }).min(1), // At least one field must be provided
 
   addTestCase: Joi.object({
     input: Joi.string().required(),

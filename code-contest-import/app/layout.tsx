@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
 import { Providers } from "@/components/providers"
 import "./globals.css"
+import "katex/dist/katex.min.css"
 
 export const metadata: Metadata = {
   title: "CodeContest Pro",

@@ -195,6 +195,52 @@ const submissionSchema = new mongoose.Schema({
   lastError: {
     type: String,
     default: null
+  },
+  testCaseStats: {
+    total: {
+      type: Number,
+      default: 0
+    },
+    passed: {
+      type: Number,
+      default: 0
+    },
+    failed: {
+      type: Number,
+      default: 0
+    },
+    visible: {
+      total: {
+        type: Number,
+        default: 0
+      },
+      passed: {
+        type: Number,
+        default: 0
+      },
+      failed: {
+        type: Number,
+        default: 0
+      }
+    },
+    hidden: {
+      total: {
+        type: Number,
+        default: 0
+      },
+      passed: {
+        type: Number,
+        default: 0
+      },
+      failed: {
+        type: Number,
+        default: 0
+      }
+    }
+  },
+  statusMessage: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

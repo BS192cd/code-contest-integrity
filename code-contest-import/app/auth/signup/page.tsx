@@ -36,8 +36,32 @@ export default function SignUpPage() {
       
       // Validate required fields
       if (!formData.username || !formData.email || !formData.password || !formData.fullName) {
-        throw new Error("All fields are required")
+        alert("All fields are required")
+        setIsLoading(false)
+        return
       }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(formData.email)) {
+        alert("Please enter a valid email address")
+        setIsLoading(false)
+        return
+      }
+
+      // Validate password length
+      if (formData.password.length < 6) {
+        alert("Password must be at least 6 characters long")
+        setIsLoading(false)
+        return
+      }
+
+      console.log("Attempting registration with:", {
+        username: formData.username,
+        email: formData.email,
+        fullName: formData.fullName,
+        role: role
+      })
 
       await register({
         username: formData.username,
@@ -53,15 +77,26 @@ export default function SignUpPage() {
       } else {
         router.push("/teacher/dashboard")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Sign up failed:", error)
-      if (error instanceof Error) {
-        alert(error.message) // Show error to user
-      } else {
-        alert("Sign up failed. Please try again.") // Fallback message
+      
+      // Better error messages
+      let errorMessage = "Sign up failed. Please try again."
+      
+      if (error.message) {
+        if (error.message.includes("Failed to fetch")) {
+          errorMessage = "Cannot connect to server. Please make sure the backend is running on port 5000."
+        } else if (error.message.includes("already exists") || error.message.includes("duplicate")) {
+          errorMessage = "Username or email already exists. Please use different credentials."
+        } else {
+          errorMessage = error.message
+        }
       }
+      
+      alert(errorMessage)
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   return (

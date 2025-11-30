@@ -1,12 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "../../hooks/useAuth"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { CreateContestModal } from "@/components/create-contest-modal"
 import { ContestManagementTable } from "@/components/contest-management-table"
 import { PlagiarismMonitor } from "@/components/plagiarism-monitor"
 import { LiveContestMonitor } from "@/components/live-contest-monitor"
+import ProblemManagement from "../../components/admin/ProblemManagement"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -71,6 +74,41 @@ const mockRecentActivity = [
 
 export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+        if (!loading && (!user || !['admin', 'teacher'].includes(user.role))) {
+      console.log('Access denied: User role:', user?.role)
+      router.push('/login')
+      return
+    }
+  }, [user, loading, router])
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading admin dashboard...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show access denied if not admin
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h1>
+          <p className="text-gray-600">You need admin privileges to access this page.</p>
+          <p className="text-sm text-gray-500 mt-2">Current role: {user?.role || 'Not logged in'}</p>
+        </div>
+      </div>
+    )
+  }
 
   const getActivityIcon = (type: string) => {
     switch (type) {
@@ -165,13 +203,18 @@ export default function AdminDashboard() {
             {/* Quick Actions & Recent Activity */}
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <Tabs defaultValue="contests" className="space-y-4">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="contests">Contest Management</TabsTrigger>
-                    <TabsTrigger value="plagiarism">Plagiarism Monitor</TabsTrigger>
-                    <TabsTrigger value="live">Live Monitoring</TabsTrigger>
-                    <TabsTrigger value="grades">Grade Management</TabsTrigger>
+                <Tabs defaultValue="problems" className="space-y-4">
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="problems">Problems</TabsTrigger>
+                    <TabsTrigger value="contests">Contests</TabsTrigger>
+                    <TabsTrigger value="plagiarism">Plagiarism</TabsTrigger>
+                    <TabsTrigger value="live">Live Monitor</TabsTrigger>
+                    <TabsTrigger value="grades">Grades</TabsTrigger>
                   </TabsList>
+
+                  <TabsContent value="problems" className="space-y-4">
+                    <ProblemManagement />
+                  </TabsContent>
 
                   <TabsContent value="contests" className="space-y-4">
                     <ContestManagementTable />

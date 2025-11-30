@@ -1,11 +1,10 @@
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 // Safe model imports to avoid OverwriteModelError if loaded multiple times
 const Problem = require('../models/Problem');
 const User = require('../models/User');
 const Contest = require('../models/Contest');
-const { allProblems } = require('./problemSeeder');
+const { enhancedProblems } = require('./enhancedProblems');
 const {
   additionalArrayProblems,
   additionalLinkedListProblems,
@@ -29,9 +28,9 @@ function filterProblemsByTitleLength(problems) {
   });
 }
 
-// Combine all problems (200+ total) and filter out short titles
+// Combine enhanced problems with additional problems and filter out short titles
 const allCombinedProblems = [
-  ...filterProblemsByTitleLength(allProblems),
+  ...filterProblemsByTitleLength(enhancedProblems),
   ...filterProblemsByTitleLength(additionalArrayProblems),
   ...filterProblemsByTitleLength(additionalLinkedListProblems),
   ...filterProblemsByTitleLength(additionalTreeProblems),

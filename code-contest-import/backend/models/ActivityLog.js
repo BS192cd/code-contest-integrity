@@ -4,7 +4,7 @@ const activityLogSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false  // Changed to false to allow system activities
   },
   action: {
     type: String,
@@ -21,10 +21,17 @@ const activityLogSchema = new mongoose.Schema({
       'problem_created',
       'problem_updated',
       'problem_deleted',
+      'problem_viewed',
       'submission_created',
       'submission_processed',
+      'submission_completed',  // Added for completed submissions
+      'submissions_viewed',  // Added for viewing submissions list
+      'submission_viewed',  // Added for viewing single submission
+      'submission_details_viewed',  // Added for viewing submission details
+      'code_executed',  // Added for code run action
       'plagiarism_detected',
       'plagiarism_cleared',
+      'plagiarism_check_failed',  // Added for failed plagiarism checks
       'test_case_added',
       'test_case_updated',
       'leaderboard_updated',

@@ -1,40 +1,103 @@
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
+
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3002'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { code, language, problemId, contestId, userId } = body
+    const { code, language, problemId, contestId } = body
 
-    if (!code || !language || !problemId || !userId) {
-      return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 })
+    // Validate required fields (matching backend validation)
+    if (!code || !language || !problemId) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Missing required fields",
+        details: [
+          { field: "code", message: "Code is required" },
+          { field: "language", message: "Language is required" },
+          { field: "problemId", message: "Problem ID is required" }
+        ]
+      }, { status: 400 })
     }
 
-    // Simulate submission processing
-    await new Promise((resolve) => setTimeout(resolve, 3000))
+    // Get auth token from cookies
+    const cookieStore = cookies()
+    const authToken = cookieStore.get('auth-token')?.value
 
-    const submissionId = `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    // Mock submission result
-    const submission = {
-      id: submissionId,
-      userId,
-      problemId,
-      contestId,
-      language,
-      code,
-      status: Math.random() > 0.3 ? "accepted" : "wrong_answer",
-      score: Math.floor(Math.random() * 100),
-      submissionTime: new Date().toISOString(),
-      executionTime: `${Math.floor(Math.random() * 100) + 1}ms`,
-      memory: `${(Math.random() * 20 + 40).toFixed(1)} MB`,
+    if (!authToken) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Authentication required" 
+      }, { status: 401 })
     }
 
-    return NextResponse.json({
-      success: true,
-      data: submission,
-      message: "Submission processed successfully",
+    // Forward request to backend
+    const backendResponse = await fetch(`${BACKEND_URL}/api/submissions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+        'X-Forwarded-For': request.headers.get('x-forwarded-for') || 'unknown'
+      },
+      body: JSON.stringify({
+        code,
+        language,
+        problemId,
+        contestId: contestId || null
+      })
     })
+
+    const responseData = await backendResponse.json()
+
+    // Return backend response with proper status
+    return NextResponse.json(responseData, { 
+      status: backendResponse.status 
+    })
+
   } catch (error) {
-    return NextResponse.json({ success: false, error: "Submission failed" }, { status: 500 })
+    console.error('Frontend API submission error:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: "Submission processing failed",
+      details: error.message 
+    }, { status: 500 })
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const cookieStore = cookies()
+    const authToken = cookieStore.get('auth-token')?.value
+
+    if (!authToken) {
+      return NextResponse.json({ 
+        success: false, 
+        error: "Authentication required" 
+      }, { status: 401 })
+    }
+
+    // Forward GET request to backend with query parameters
+    const queryString = searchParams.toString()
+    const backendResponse = await fetch(`${BACKEND_URL}/api/submissions?${queryString}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    const responseData = await backendResponse.json()
+    return NextResponse.json(responseData, { 
+      status: backendResponse.status 
+    })
+
+  } catch (error) {
+    console.error('Frontend API get submissions error:', error)
+    return NextResponse.json({ 
+      success: false, 
+      error: "Failed to fetch submissions" 
+    }, { status: 500 })
   }
 }

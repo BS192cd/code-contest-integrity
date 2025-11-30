@@ -11,22 +11,39 @@ const activityLogger = (action) => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         setImmediate(async () => {
           try {
-            await logActivity({
-              userId: req.user?._id,
-              action: action,
-              details: {
-                method: req.method,
-                path: req.path,
-                params: req.params,
-                query: req.query,
-                body: sanitizeBody(req.body),
-                statusCode: res.statusCode,
-                responseData: sanitizeResponse(data)
-              },
-              ipAddress: req.ip,
-              userAgent: req.get('User-Agent'),
-              timestamp: new Date()
-            });
+            // Only log if user is authenticated (skip for anonymous actions)
+            if (req.user?._id) {
+              // Determine entityType based on action
+              let entityType = 'system';
+              if (action.includes('submission') || action.includes('code')) {
+                entityType = 'submission';
+              } else if (action.includes('problem')) {
+                entityType = 'problem';
+              } else if (action.includes('contest')) {
+                entityType = 'contest';
+              } else if (action.includes('user')) {
+                entityType = 'user';
+              }
+              
+              await logActivity({
+                userId: req.user._id,
+                action: action,
+                entityType: entityType,
+                entityId: req.params.id || req.body.problemId || req.body.contestId,
+                details: {
+                  method: req.method,
+                  path: req.path,
+                  params: req.params,
+                  query: req.query,
+                  body: sanitizeBody(req.body),
+                  statusCode: res.statusCode,
+                  responseData: sanitizeResponse(data)
+                },
+                ipAddress: req.ip,
+                userAgent: req.get('User-Agent'),
+                timestamp: new Date()
+              });
+            }
           } catch (error) {
             console.error('Activity logging error:', error);
           }
@@ -47,6 +64,8 @@ const logActivity = async (activityData) => {
     const activity = new ActivityLog({
       userId: activityData.userId,
       action: activityData.action,
+      entityType: activityData.entityType || 'system',  // Default to 'system' if not provided
+      entityId: activityData.entityId,
       details: activityData.details,
       ipAddress: activityData.ipAddress,
       userAgent: activityData.userAgent,
@@ -142,7 +161,7 @@ const loggers = {
   deleteProblem: activityLogger('problem_deleted'),
   
   // Submission activities
-  submitCode: activityLogger('code_submitted'),
+  submitCode: activityLogger('submission_created'),  // Changed to match enum
   viewSubmission: activityLogger('submission_viewed'),
   
   // Plagiarism activities

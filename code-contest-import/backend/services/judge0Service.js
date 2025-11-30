@@ -1,9 +1,11 @@
 const axios = require('axios');
+const SmartMockJudge = require('./smartMockJudge');
 
 class Judge0Service {
   constructor() {
     this.baseURL = process.env.JUDGE0_API_URL || 'https://judge0-ce.p.rapidapi.com';
     this.apiKey = process.env.JUDGE0_API_KEY;
+    this.smartMock = new SmartMockJudge();
     this.languageMap = {
       'python': 71,    // Python 3.8.1
       'javascript': 63, // JavaScript (Node.js 12.14.0)
@@ -23,9 +25,12 @@ class Judge0Service {
         throw new Error(`Unsupported language: ${language}`);
       }
 
+      console.log(`🔄 Judge0 Submit: ${language} (ID: ${languageId}), Code length: ${code.length}, Input length: ${input.length}`);
+
       // If in development/testing mode without real Judge0 API
-      if (!this.apiKey || this.apiKey === 'mock-judge0-key') {
-        return this.mockSubmission(code, language, input, expectedOutput);
+      if (!this.apiKey || this.apiKey === 'mock-judge0-key' || this.apiKey === 'your-judge0-api-key-here') {
+        console.log('📝 Using smart mock Judge0 service (no real API key configured)');
+        return await this.smartMock.submitCode(code, language, input, expectedOutput);
       }
 
       const submissionData = {
@@ -35,22 +40,39 @@ class Judge0Service {
         expected_output: expectedOutput ? Buffer.from(expectedOutput).toString('base64') : undefined
       };
 
+      console.log(`🌐 Calling Judge0 API: ${this.baseURL}/submissions`);
+
       const response = await axios.post(`${this.baseURL}/submissions`, submissionData, {
         params: {
           base64_encoded: 'true',
-          wait: 'false'
+          wait: 'true'  // ⚡ FAST MODE: Get result immediately
         },
         headers: {
           'Content-Type': 'application/json',
           'X-RapidAPI-Key': this.apiKey,
           'X-RapidAPI-Host': process.env.JUDGE0_HOST || 'judge0-ce.p.rapidapi.com'
-        }
+        },
+        timeout: 30000 // 30 second timeout for synchronous wait
       });
 
-      return response.data;
+      // Decode base64 encoded fields
+      const result = response.data;
+      if (result.stdout) result.stdout = Buffer.from(result.stdout, 'base64').toString();
+      if (result.stderr) result.stderr = Buffer.from(result.stderr, 'base64').toString();
+      if (result.compile_output) result.compile_output = Buffer.from(result.compile_output, 'base64').toString();
+
+      console.log(`✅ Judge0 execution completed: ${result.status?.description || 'Done'}`);
+      return result;  // Result is already complete!
     } catch (error) {
-      console.error('Judge0 submission error:', error);
-      throw new Error('Code execution failed');
+      console.error('❌ Judge0 submission error:', error.response?.data || error.message);
+      
+      // If API fails, fall back to mock for development
+      if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
+        console.log('🔄 Judge0 API unavailable, falling back to mock service');
+        return this.mockSubmission(code, language, input, expectedOutput);
+      }
+      
+      throw new Error(`Code execution failed: ${error.response?.data?.error || error.message}`);
     }
   }
 
@@ -58,8 +80,8 @@ class Judge0Service {
   async getSubmissionResult(token) {
     try {
       // If in development/testing mode
-      if (!this.apiKey || this.apiKey === 'mock-judge0-key') {
-        return this.mockResult(token);
+      if (!this.apiKey || this.apiKey === 'mock-judge0-key' || this.apiKey === 'your-judge0-api-key-here') {
+        return await this.smartMock.getSubmissionResult(token);
       }
 
       const response = await axios.get(`${this.baseURL}/submissions/${token}`, {
@@ -83,7 +105,8 @@ class Judge0Service {
       return result;
     } catch (error) {
       console.error('Judge0 get result error:', error);
-      throw new Error('Failed to get execution result');
+      // Fall back to mock if API fails
+      return this.mockResult(token);
     }
   }
 
@@ -163,8 +186,8 @@ class Judge0Service {
             testCase.expectedOutput
           );
 
-          // Poll for result with timeout
-          const result = await this.pollForResult(submission.token, 30000); // 30 second timeout
+          // Result is already complete from submitCode (synchronous mode)
+          const result = submission;
           
           // Normalize expected and actual to reduce whitespace-related wrong answers
           const expectedTrimmed = (testCase.expectedOutput ?? '').toString().trim();

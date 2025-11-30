@@ -1,56 +1,148 @@
 "use client"
 
-import { useState } from "react"
-import { DashboardHeader } from "@/components/dashboard-header"
-import { DashboardSidebar } from "@/components/dashboard-sidebar"
-import { ProtectedRoute } from "@/components/protected-route"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Trophy, Edit, Save } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+import { ProtectedRoute } from "@/components/protected-route"
+import { DashboardHeader } from "@/components/dashboard-header"
+import { DashboardSidebar } from "@/components/dashboard-sidebar"
+import { User, Mail, Calendar, Award, BookOpen, Trophy, Save, Copy } from "lucide-react"
+import { useRouter } from "next/navigation"
 
-const achievements = [
-  {
-    id: 1,
-    title: "First Contest",
-    description: "Participated in your first contest",
-    earned: true,
-    date: "2024-01-15",
-  },
-  { id: 2, title: "Problem Solver", description: "Solved 50+ problems", earned: true, date: "2024-02-20" },
-  { id: 3, title: "Speed Demon", description: "Solved a problem in under 5 minutes", earned: false },
-  { id: 4, title: "Consistency King", description: "7-day solving streak", earned: true, date: "2024-03-10" },
-]
-
-const contestHistory = [
-  { id: 1, name: "Weekly Challenge #42", rank: 15, score: 850, date: "2024-03-15" },
-  { id: 2, name: "Algorithm Sprint", rank: 8, score: 920, date: "2024-03-08" },
-  { id: 3, name: "Data Structures Quiz", rank: 23, score: 780, date: "2024-03-01" },
-]
-
-export default function ProfilePage() {
+export default function StudentProfilePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [user, setUser] = useState<any>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const { user } = useAuth()
-  const [profileData, setProfileData] = useState({
-    name: user?.name || "John Doe",
-    email: user?.email || "john.doe@example.com",
-    bio: "Passionate competitive programmer with a love for algorithms and data structures.",
-    university: "Tech University",
-    year: "3rd Year",
-    major: "Computer Science",
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    username: "",
+    bio: ""
   })
 
-  const handleSave = () => {
-    setIsEditing(false)
-    // Here you would typically save to backend
+  useEffect(() => {
+    fetchUserProfile()
+  }, [])
+
+  const fetchUserProfile = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem('auth_token')
+      
+      if (token) {
+        // Fetch full profile from API
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            // The API returns { data: { user: {...} } }
+            const profileData = data.data.user || data.data
+            setUser(profileData)
+            setFormData({
+              fullName: profileData.fullName || "",
+              email: profileData.email || "",
+              username: profileData.username || "",
+              bio: profileData.bio || ""
+            })
+            
+            // Update localStorage with full user data including _id
+            localStorage.setItem("user", JSON.stringify(profileData))
+            return
+          }
+        }
+      }
+      
+      // Fallback to localStorage data
+      const userData = localStorage.getItem("user")
+      if (userData) {
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+        setFormData({
+          fullName: parsedUser.fullName || "",
+          email: parsedUser.email || "",
+          username: parsedUser.username || "",
+          bio: parsedUser.bio || ""
+        })
+      }
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error)
+      // Fallback to localStorage
+      const userData = localStorage.getItem("user")
+      if (userData) {
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+        setFormData({
+          fullName: parsedUser.fullName || "",
+          email: parsedUser.email || "",
+          username: parsedUser.username || "",
+          bio: parsedUser.bio || ""
+        })
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      // In a real app, call API to update profile
+      const updatedUser = { ...user, ...formData }
+      localStorage.setItem("user", JSON.stringify(updatedUser))
+      setUser(updatedUser)
+      setIsEditing(false)
+      alert("Profile updated successfully!")
+    } catch (error) {
+      console.error("Failed to update profile:", error)
+      alert("Failed to update profile. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+    alert(`${label} copied to clipboard!`)
+  }
+
+  const stats = {
+    problemsSolved: 89,
+    contestsParticipated: 12,
+    averageScore: 78,
+    currentRank: 247
+  }
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute requiredRole="student">
+        <div className="min-h-screen bg-background">
+          <DashboardHeader onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
+          <div className="flex">
+            <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+            <main className="flex-1 p-6 md:ml-0">
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground">Loading profile...</p>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
   }
 
   return (
@@ -64,255 +156,239 @@ export default function ProfilePage() {
           <main className="flex-1 p-6 md:ml-0">
             <div className="max-w-4xl mx-auto">
               <div className="mb-8">
-                <h1 className="text-3xl font-bold text-balance">My Profile</h1>
-                <p className="text-muted-foreground mt-2 text-pretty">
-                  Manage your profile information and view your coding journey.
+                <h1 className="text-3xl font-bold">My Profile</h1>
+                <p className="text-muted-foreground mt-2">
+                  Manage your account information and view your statistics
                 </p>
               </div>
 
-              <div className="grid gap-6 md:grid-cols-3">
-                {/* Profile Card */}
-                <Card className="md:col-span-1">
-                  <CardHeader className="text-center">
-                    <Avatar className="w-24 h-24 mx-auto mb-4">
-                      <AvatarImage src="/diverse-user-avatars.png" alt="Profile" />
-                      <AvatarFallback className="text-2xl">
-                        {profileData.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <CardTitle>{profileData.name}</CardTitle>
-                    <CardDescription>{profileData.email}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Global Rank</span>
-                        <Badge variant="secondary">#247</Badge>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Problems Solved</span>
-                        <span className="font-medium">89</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Contests Joined</span>
-                        <span className="font-medium">12</span>
-                      </div>
-                    </div>
-                    <Button
-                      className="w-full"
-                      variant={isEditing ? "default" : "outline"}
-                      onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
-                    >
-                      {isEditing ? <Save className="mr-2 h-4 w-4" /> : <Edit className="mr-2 h-4 w-4" />}
-                      {isEditing ? "Save Changes" : "Edit Profile"}
-                    </Button>
-                  </CardContent>
-                </Card>
+              <Tabs defaultValue="profile" className="space-y-6">
+                <TabsList>
+                  <TabsTrigger value="profile">Profile</TabsTrigger>
+                  <TabsTrigger value="stats">Statistics</TabsTrigger>
+                  <TabsTrigger value="settings">Settings</TabsTrigger>
+                </TabsList>
 
-                {/* Main Content */}
-                <div className="md:col-span-2">
-                  <Tabs defaultValue="info" className="space-y-6">
-                    <TabsList>
-                      <TabsTrigger value="info">Information</TabsTrigger>
-                      <TabsTrigger value="achievements">Achievements</TabsTrigger>
-                      <TabsTrigger value="history">Contest History</TabsTrigger>
-                      <TabsTrigger value="stats">Statistics</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="info">
-                      <Card>
-                        <CardHeader>
+                {/* Profile Tab */}
+                <TabsContent value="profile" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
                           <CardTitle>Personal Information</CardTitle>
                           <CardDescription>Update your profile details</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label htmlFor="name">Full Name</Label>
-                              <Input
-                                id="name"
-                                value={profileData.name}
-                                onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                                disabled={!isEditing}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="email">Email</Label>
-                              <Input
-                                id="email"
-                                type="email"
-                                value={profileData.email}
-                                onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                                disabled={!isEditing}
-                              />
-                            </div>
+                        </div>
+                        {!isEditing ? (
+                          <Button onClick={() => setIsEditing(true)}>Edit Profile</Button>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Button onClick={handleSave} disabled={isSaving}>
+                              <Save className="mr-2 h-4 w-4" />
+                              {isSaving ? "Saving..." : "Save Changes"}
+                            </Button>
+                            <Button variant="outline" onClick={() => setIsEditing(false)}>
+                              Cancel
+                            </Button>
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="bio">Bio</Label>
-                            <Textarea
-                              id="bio"
-                              value={profileData.bio}
-                              onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                              disabled={!isEditing}
-                              rows={3}
-                            />
-                          </div>
-                          <div className="grid gap-4 md:grid-cols-3">
-                            <div className="space-y-2">
-                              <Label htmlFor="university">University</Label>
-                              <Input
-                                id="university"
-                                value={profileData.university}
-                                onChange={(e) => setProfileData({ ...profileData, university: e.target.value })}
-                                disabled={!isEditing}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="year">Year</Label>
-                              <Input
-                                id="year"
-                                value={profileData.year}
-                                onChange={(e) => setProfileData({ ...profileData, year: e.target.value })}
-                                disabled={!isEditing}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="major">Major</Label>
-                              <Input
-                                id="major"
-                                value={profileData.major}
-                                onChange={(e) => setProfileData({ ...profileData, major: e.target.value })}
-                                disabled={!isEditing}
-                              />
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    <TabsContent value="achievements">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Achievements</CardTitle>
-                          <CardDescription>Your coding milestones and accomplishments</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid gap-4">
-                            {achievements.map((achievement) => (
-                              <div
-                                key={achievement.id}
-                                className={`flex items-center gap-4 p-4 rounded-lg border ${
-                                  achievement.earned ? "bg-accent/50" : "opacity-50"
-                                }`}
-                              >
-                                <div
-                                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                                    achievement.earned ? "bg-primary text-primary-foreground" : "bg-muted"
-                                  }`}
-                                >
-                                  <Trophy className="h-6 w-6" />
-                                </div>
-                                <div className="flex-1">
-                                  <h4 className="font-medium">{achievement.title}</h4>
-                                  <p className="text-sm text-muted-foreground">{achievement.description}</p>
-                                  {achievement.earned && achievement.date && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      Earned on {new Date(achievement.date).toLocaleDateString()}
-                                    </p>
-                                  )}
-                                </div>
-                                {achievement.earned && <Badge variant="secondary">Earned</Badge>}
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    <TabsContent value="history">
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>Contest History</CardTitle>
-                          <CardDescription>Your recent contest performances</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {contestHistory.map((contest) => (
-                              <div key={contest.id} className="flex items-center justify-between p-4 border rounded-lg">
-                                <div>
-                                  <h4 className="font-medium">{contest.name}</h4>
-                                  <p className="text-sm text-muted-foreground">
-                                    {new Date(contest.date).toLocaleDateString()}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="outline">Rank #{contest.rank}</Badge>
-                                    <span className="font-medium">{contest.score} pts</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </TabsContent>
-
-                    <TabsContent value="stats">
-                      <div className="grid gap-6">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Problem Solving Statistics</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Easy Problems</span>
-                                <span>45/60 (75%)</span>
-                              </div>
-                              <Progress value={75} className="h-2" />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Medium Problems</span>
-                                <span>32/80 (40%)</span>
-                              </div>
-                              <Progress value={40} className="h-2" />
-                            </div>
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Hard Problems</span>
-                                <span>12/50 (24%)</span>
-                              </div>
-                              <Progress value={24} className="h-2" />
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Activity Overview</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-primary">7</div>
-                                <p className="text-sm text-muted-foreground">Current Streak</p>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-2xl font-bold text-primary">156</div>
-                                <p className="text-sm text-muted-foreground">Total Submissions</p>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        )}
                       </div>
-                    </TabsContent>
-                  </Tabs>
-                </div>
-              </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="flex items-center gap-6">
+                        <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-12 w-12 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-semibold">{user?.fullName || "Student"}</h3>
+                          <p className="text-muted-foreground">@{user?.username}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Badge>Student</Badge>
+                            {user?._id && (
+                              <Badge variant="secondary" className="font-mono text-xs">
+                                ID: {user._id}
+                              </Badge>
+                            )}
+                          </div>
+                          {user?._id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mt-2 h-7 text-xs"
+                              onClick={() => copyToClipboard(user._id, "Student ID")}
+                            >
+                              <Copy className="mr-1 h-3 w-3" />
+                              Copy ID
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-muted rounded-lg">
+                        <h4 className="font-semibold mb-2 flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Your Student ID
+                        </h4>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Share this ID with your teacher to join their class
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 p-2 bg-background rounded border font-mono text-sm">
+                            {user?._id || "ID not available"}
+                          </code>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyToClipboard(user?._id || "", "Student ID")}
+                            disabled={!user?._id}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="fullName">Full Name</Label>
+                          <Input
+                            id="fullName"
+                            value={formData.fullName}
+                            onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                            disabled={!isEditing}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="username">Username</Label>
+                          <Input
+                            id="username"
+                            value={formData.username}
+                            onChange={(e) => setFormData({...formData, username: e.target.value})}
+                            disabled={!isEditing}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={formData.email}
+                            onChange={(e) => setFormData({...formData, email: e.target.value})}
+                            disabled={!isEditing}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="bio">Bio</Label>
+                          <textarea
+                            id="bio"
+                            value={formData.bio}
+                            onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                            disabled={!isEditing}
+                            className="w-full min-h-[100px] px-3 py-2 rounded-md border border-input bg-background"
+                            placeholder="Tell us about yourself..."
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Statistics Tab */}
+                <TabsContent value="stats" className="space-y-6">
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Problems Solved</CardTitle>
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.problemsSolved}</div>
+                        <p className="text-xs text-muted-foreground">
+                          Keep solving to improve!
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Contests Participated</CardTitle>
+                        <Trophy className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.contestsParticipated}</div>
+                        <p className="text-xs text-muted-foreground">
+                          Join more contests
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+                        <Award className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{stats.averageScore}%</div>
+                        <p className="text-xs text-muted-foreground">
+                          Across all contests
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Current Rank</CardTitle>
+                        <Trophy className="h-4 w-4 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">#{stats.currentRank}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : "Recently joined"}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+
+                {/* Settings Tab */}
+                <TabsContent value="settings" className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Account Settings</CardTitle>
+                      <CardDescription>Manage your account preferences</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Email Notifications</p>
+                          <p className="text-sm text-muted-foreground">
+                            Receive email updates about contests and submissions
+                          </p>
+                        </div>
+                        <Button variant="outline">Configure</Button>
+                      </div>
+                      <div className="h-px bg-border" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Change Password</p>
+                          <p className="text-sm text-muted-foreground">
+                            Update your account password
+                          </p>
+                        </div>
+                        <Button variant="outline">Change</Button>
+                      </div>
+                      <div className="h-px bg-border" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Two-Factor Authentication</p>
+                          <p className="text-sm text-muted-foreground">
+                            Add an extra layer of security
+                          </p>
+                        </div>
+                        <Button variant="outline">Enable</Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
             </div>
           </main>
         </div>

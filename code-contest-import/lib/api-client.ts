@@ -1,6 +1,8 @@
 // lib/api-client.ts - Should point to your backend
 // Base URL should include the /api segment to avoid duplicating in endpoints
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
+  ? `${process.env.NEXT_PUBLIC_API_URL}/api`
+  : "http://localhost:3001/api"; // Changed default from 5000 to 3001
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -52,17 +54,34 @@ class ApiClient {
       const response = await fetch(url, {
         ...options,
         headers,
+        // Disable caching to always get fresh data
+        cache: 'no-store',
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        // Provide more detailed error information
+        const errorMessage = data.error || data.message || `HTTP error! status: ${response.status}`;
+        const errorDetails = data.details || data.errors || '';
+        const fullError = errorDetails ? `${errorMessage}: ${JSON.stringify(errorDetails)}` : errorMessage;
+        
+        // Create error with status code
+        const error: any = new Error(fullError);
+        error.status = response.status;
+        throw error;
       }
 
       return data;
-    } catch (error) {
-      console.error('API request failed:', error);
+    } catch (error: any) {
+      // Don't log 401 errors - they're expected when not authenticated
+      if (error.status !== 401) {
+        console.error('API request failed:', error);
+      }
+      // If it's a JSON parse error, provide more context
+      if (error instanceof SyntaxError) {
+        throw new Error(`Invalid response from server: ${error.message}`);
+      }
       throw error;
     }
   }
@@ -173,6 +192,40 @@ class ApiClient {
     return this.request<any>(`/problems/${id}`);
   }
 
+  async createProblem(problemData: any) {
+    return this.request<any>('/problems', {
+      method: 'POST',
+      body: JSON.stringify(problemData),
+    });
+  }
+
+  async updateProblem(id: string, problemData: any) {
+    return this.request<any>(`/problems/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(problemData),
+    });
+  }
+
+  async deleteProblem(id: string) {
+    return this.request<any>(`/problems/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async generateTestCases(id: string, problemData: any) {
+    return this.request<any>(`/problems/${id}/generate-test-cases`, {
+      method: 'POST',
+      body: JSON.stringify(problemData),
+    });
+  }
+
+  async updateContest(id: string, contestData: any) {
+    return this.request<any>(`/contests/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(contestData),
+    });
+  }
+
   // Submission endpoints
   async submitSolution(submissionData: {
     code: string;
@@ -237,6 +290,72 @@ class ApiClient {
 
   async getContestAnalytics(contestId: string) {
     return this.request<any>(`/analytics/contests/${contestId}`);
+  }
+
+  // Classes endpoints
+  async getClasses() {
+    return this.request<any[]>('/classes');
+  }
+
+  async getClass(id: string) {
+    return this.request<any>(`/classes/${id}`);
+  }
+
+  async createClass(classData: {
+    name: string;
+    description?: string;
+    students?: string[];
+    contests?: string[];
+  }) {
+    return this.request<any>('/classes', {
+      method: 'POST',
+      body: JSON.stringify(classData),
+    });
+  }
+
+  async updateClass(id: string, classData: {
+    name?: string;
+    description?: string;
+    students?: string[];
+    contests?: string[];
+    isActive?: boolean;
+  }) {
+    return this.request<any>(`/classes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(classData),
+    });
+  }
+
+  async deleteClass(id: string) {
+    return this.request<any>(`/classes/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addStudentsToClass(classId: string, studentIds: string[]) {
+    return this.request<any>(`/classes/${classId}/students`, {
+      method: 'POST',
+      body: JSON.stringify({ studentIds }),
+    });
+  }
+
+  async removeStudentFromClass(classId: string, studentId: string) {
+    return this.request<any>(`/classes/${classId}/students/${studentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async assignContestsToClass(classId: string, contestIds: string[]) {
+    return this.request<any>(`/classes/${classId}/contests`, {
+      method: 'POST',
+      body: JSON.stringify({ contestIds }),
+    });
+  }
+
+  async removeContestFromClass(classId: string, contestId: string) {
+    return this.request<any>(`/classes/${classId}/contests/${contestId}`, {
+      method: 'DELETE',
+    });
   }
 
   // Health check

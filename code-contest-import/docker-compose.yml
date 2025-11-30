@@ -1,0 +1,120 @@
+version: '3.7'
+
+services:
+  judge0-server:
+    image: judge0/judge0:1.13.0
+    volumes:
+      - ./judge0-data:/srv/judge0
+    ports:
+      - "2358:2358"
+    privileged: true
+    environment:
+      # Redis configuration
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      
+      # PostgreSQL configuration
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=YourSecurePassword123
+      
+      # Performance optimization - INCREASED WORKERS
+      - WORKERS=4
+      - MAX_QUEUE_SIZE=100
+      - MAX_WORKERS_PER_QUEUE=4
+      
+      # Enable synchronous wait mode (for fast results)
+      - ENABLE_WAIT_RESULT=true
+      - WAIT_TIMEOUT=30
+      
+      # Compiler and execution settings
+      - ENABLE_COMPILER_OPTIONS=true
+      - ALLOWED_LANGUAGES_FOR_COMPILE_OPTIONS=44,45,46,47,48,49,50,51,52,53,54
+      
+      # Time and memory limits
+      - MAX_CPU_TIME_LIMIT=15
+      - MAX_WALL_TIME_LIMIT=30
+      - MAX_MEMORY_LIMIT=512000
+      - MAX_STACK_LIMIT=128000
+      - MAX_PROCESSES_AND_OR_THREADS=60
+      - MAX_FILE_SIZE=1024
+      
+      # Submission limits
+      - MAX_SUBMISSION_BATCH_SIZE=20
+      - SUBMISSION_CACHE_DURATION=3600
+      
+      # Enable batch submissions
+      - ENABLE_BATCHED_SUBMISSIONS=true
+      
+      # Maintenance and cleanup
+      - ENABLE_SUBMISSION_DELETE=true
+      - SUBMISSION_RETENTION_TIME=86400
+      
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    restart: unless-stopped
+
+  judge0-workers:
+    image: judge0/judge0:1.13.0
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0-data:/srv/judge0
+    privileged: true
+    environment:
+      # Same configuration as server
+      - REDIS_HOST=judge0-redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=judge0-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=YourSecurePassword123
+      
+      # Worker-specific settings
+      - WORKERS=4
+      - MAX_QUEUE_SIZE=100
+      - MAX_WORKERS_PER_QUEUE=4
+      
+      - ENABLE_WAIT_RESULT=true
+      - WAIT_TIMEOUT=30
+      - ENABLE_COMPILER_OPTIONS=true
+      - ALLOWED_LANGUAGES_FOR_COMPILE_OPTIONS=44,45,46,47,48,49,50,51,52,53,54
+      
+      - MAX_CPU_TIME_LIMIT=15
+      - MAX_WALL_TIME_LIMIT=30
+      - MAX_MEMORY_LIMIT=512000
+      - MAX_STACK_LIMIT=128000
+      - MAX_PROCESSES_AND_OR_THREADS=60
+      - MAX_FILE_SIZE=1024
+      
+      - MAX_SUBMISSION_BATCH_SIZE=20
+      - ENABLE_BATCHED_SUBMISSIONS=true
+      
+    depends_on:
+      - judge0-db
+      - judge0-redis
+    restart: unless-stopped
+
+  judge0-db:
+    image: postgres:13.0
+    environment:
+      - POSTGRES_DB=judge0
+      - POSTGRES_USER=judge0
+      - POSTGRES_PASSWORD=YourSecurePassword123
+    volumes:
+      - judge0-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  judge0-redis:
+    image: redis:6.0
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - judge0-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  judge0-postgres-data:
+  judge0-redis-data:

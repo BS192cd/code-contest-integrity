@@ -32,35 +32,11 @@ interface ProblemDetails {
 }
 
 const defaultCode = {
-  python: `def twoSum(nums, target):
-    """
-    :type nums: List[int]
-    :type target: int
-    :rtype: List[int]
-    """
-    # Your solution here
-    pass`,
-  javascript: `/**
- * @param {number[]} nums
- * @param {number} target
- * @return {number[]}
- */
-var twoSum = function(nums, target) {
-    // Your solution here
-};`,
-  java: `class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        // Your solution here
-        return new int[0];
-    }
-}`,
-  cpp: `class Solution {
-public:
-    vector<int> twoSum(vector<int>& nums, int target) {
-        // Your solution here
-        return {};
-    }
-};`,
+  python: '',
+  javascript: '',
+  java: '',
+  cpp: '',
+  c: ''
 }
 
 export default function ProblemPage() {

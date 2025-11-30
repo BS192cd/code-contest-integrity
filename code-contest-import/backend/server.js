@@ -1,7 +1,6 @@
 const path = require('path');
-//require('dotenv').config({ path: path.resolve(__dirname, '.env') });
-// server.js - LINE 1
-require('dotenv').config({ path: 'C:\\Users\\momin\\Downloads\\code-contest-cursor\\code-contest-import-main\\code-contest-import\\backend\\.env' });
+// Load .env from current backend directory
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 // Optional debug of environment loading without leaking secrets
 if (process.env.DEBUG_ENV === 'true') {
   const envPath = path.resolve(__dirname, '.env');
@@ -100,6 +99,17 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Trust proxy (important for Replit)
 app.set('trust proxy', 1);
 
+// Cache-busting middleware - Prevent browser caching of API responses
+app.use('/api', (req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  });
+  next();
+});
+
 // API routes
 app.use('/api', apiRoutes);
 
@@ -152,71 +162,9 @@ app.use('*', (req, res) => {
   });
 });
 
-// Global error handler
-app.use((error, req, res, next) => {
-  console.error('Global error handler:', error);
-
-  // Mongoose validation error
-  if (error.name === 'ValidationError') {
-    const errors = Object.values(error.errors).map(err => ({
-      field: err.path,
-      message: err.message
-    }));
-
-    return res.status(400).json({
-      success: false,
-      error: 'Validation error',
-      details: errors
-    });
-  }
-
-  // MongoDB duplicate key error
-  if (error.code === 11000) {
-    const field = Object.keys(error.keyValue)[0];
-    return res.status(400).json({
-      success: false,
-      error: `${field} already exists`
-    });
-  }
-
-  // Multer file upload errors
-  if (error instanceof require('multer').MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        error: 'File size too large'
-      });
-    }
-    if (error.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({
-        success: false,
-        error: 'Too many files'
-      });
-    }
-  }
-
-  // JWT errors
-  if (error.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      error: 'Invalid token'
-    });
-  }
-
-  if (error.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      error: 'Token expired'
-    });
-  }
-
-  // Default error response
-  res.status(error.status || 500).json({
-    success: false,
-    error: process.env.NODE_ENV === 'development' ? 
-      error.message : 'Internal server error'
-  });
-});
+// Global error handler - Import and use enhanced error handler
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 // Start server
 const PORT = process.env.PORT || 3001;
